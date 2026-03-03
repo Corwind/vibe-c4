@@ -3,7 +3,6 @@ package analyzer
 import (
 	"context"
 	"fmt"
-	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
@@ -109,10 +108,10 @@ func (a *GoAnalyzer) scanPackages(ctx context.Context, projectPath string, modul
 			return filepath.SkipDir
 		}
 
-		// Try to parse Go files in this directory
+		// Parse Go files with full AST (not imports-only) for type extraction
 		pkgs, err := parser.ParseDir(fset, path, func(fi os.FileInfo) bool {
 			return strings.HasSuffix(fi.Name(), ".go") && !strings.HasSuffix(fi.Name(), "_test.go")
-		}, parser.ImportsOnly)
+		}, parser.ParseComments)
 		if err != nil {
 			return nil // skip directories that can't be parsed
 		}
@@ -151,9 +150,16 @@ func (a *GoAnalyzer) scanPackages(ctx context.Context, projectPath string, modul
 						allImports = append(allImports, impPath)
 					}
 				}
+
+				relFile := filepath.Join(relDir, filepath.Base(filename))
+				extractTypesFromFile(fset, file, relFile, &pkgInfo)
 			}
 
 			pkgInfo.Imports = allImports
+
+			// Attach methods to their receiver structs
+			attachMethodsToStructs(&pkgInfo)
+
 			packages = append(packages, pkgInfo)
 		}
 
@@ -205,11 +211,3 @@ func (a *GoAnalyzer) buildImportGraph(packages []PackageInfo, modulePath string)
 	return graph
 }
 
-// extractImportsFromFile extracts all import paths from an AST file.
-func extractImportsFromFile(file *ast.File) []string {
-	var imports []string
-	for _, imp := range file.Imports {
-		imports = append(imports, strings.Trim(imp.Path.Value, `"`))
-	}
-	return imports
-}
