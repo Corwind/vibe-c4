@@ -7,6 +7,9 @@ describe("useProjectStore", () => {
       currentProjectId: null,
       currentLevel: "context",
       navigationHistory: [{ level: "context", label: "System Context" }],
+      selectedNodeId: null,
+      selectedNodeData: null,
+      selectedNodeType: null,
     });
   });
 
@@ -86,5 +89,78 @@ describe("useProjectStore", () => {
     useProjectStore.getState().setCurrentProject(null);
 
     expect(useProjectStore.getState().currentProjectId).toBeNull();
+  });
+
+  it("sets selected node", () => {
+    const nodeData = { label: "TestNode", kind: "struct" };
+    useProjectStore.getState().setSelectedNode("node-1", nodeData, "component");
+
+    const state = useProjectStore.getState();
+    expect(state.selectedNodeId).toBe("node-1");
+    expect(state.selectedNodeData).toEqual(nodeData);
+    expect(state.selectedNodeType).toBe("component");
+  });
+
+  it("clears selected node", () => {
+    useProjectStore
+      .getState()
+      .setSelectedNode("node-1", { label: "Test" }, "system");
+    useProjectStore.getState().clearSelectedNode();
+
+    const state = useProjectStore.getState();
+    expect(state.selectedNodeId).toBeNull();
+    expect(state.selectedNodeData).toBeNull();
+    expect(state.selectedNodeType).toBeNull();
+  });
+
+  it("clears selection when navigating to a different level", () => {
+    useProjectStore
+      .getState()
+      .setSelectedNode("node-1", { label: "Test" }, "system");
+    useProjectStore.getState().pushNavigation({
+      level: "container",
+      label: "Containers",
+    });
+
+    const state = useProjectStore.getState();
+    expect(state.selectedNodeId).toBeNull();
+    expect(state.selectedNodeData).toBeNull();
+  });
+
+  it("clears selection when setting a new project", () => {
+    useProjectStore
+      .getState()
+      .setSelectedNode("node-1", { label: "Test" }, "system");
+    useProjectStore.getState().setCurrentProject("proj-2");
+
+    const state = useProjectStore.getState();
+    expect(state.selectedNodeId).toBeNull();
+    expect(state.selectedNodeData).toBeNull();
+  });
+
+  it("clears selection when navigating via breadcrumbs", () => {
+    useProjectStore.getState().pushNavigation({
+      level: "container",
+      label: "Containers",
+    });
+    useProjectStore
+      .getState()
+      .setSelectedNode("node-1", { label: "Test" }, "container");
+    useProjectStore.getState().navigateTo(0);
+
+    const state = useProjectStore.getState();
+    expect(state.selectedNodeId).toBeNull();
+    expect(state.selectedNodeData).toBeNull();
+  });
+
+  it("clears selection on reset navigation", () => {
+    useProjectStore
+      .getState()
+      .setSelectedNode("node-1", { label: "Test" }, "system");
+    useProjectStore.getState().resetNavigation();
+
+    const state = useProjectStore.getState();
+    expect(state.selectedNodeId).toBeNull();
+    expect(state.selectedNodeData).toBeNull();
   });
 });

@@ -23,6 +23,7 @@ export type {
   AnalysisStatus,
   DiagramLevel,
   C4Node,
+  C4NodeData,
   C4Edge,
   DiagramData,
   AnalyzeProjectInput,

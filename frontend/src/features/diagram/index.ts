@@ -1,5 +1,6 @@
 export { DiagramViewer } from "./components/DiagramViewer";
 export { DiagramPage } from "./components/DiagramPage";
+export { DetailPanel } from "./components/DetailPanel";
 export { Breadcrumbs } from "./components/Breadcrumbs";
 export { SystemNode } from "./components/nodes/SystemNode";
 export { ContainerNode } from "./components/nodes/ContainerNode";

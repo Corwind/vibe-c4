@@ -19,6 +19,7 @@ import { ExternalSystemNode } from "./nodes/ExternalSystemNode";
 import { PersonNode } from "./nodes/PersonNode";
 import { C4Edge } from "./edges/C4Edge";
 import { LoadingSpinner } from "@/components/common";
+import type { C4NodeData } from "@/features/project/types/project.types";
 
 const nodeTypes = {
   system: SystemNode,
@@ -38,7 +39,10 @@ interface DiagramViewerProps {
   edges: Edge[];
   isLoading?: boolean;
   error?: Error | null;
+  selectedNodeId?: string | null;
+  onNodeClick?: (nodeId: string, nodeData: C4NodeData, nodeType: string) => void;
   onNodeDoubleClick?: (nodeId: string, nodeLabel: string) => void;
+  onPaneClick?: () => void;
 }
 
 export function DiagramViewer({
@@ -46,8 +50,21 @@ export function DiagramViewer({
   edges,
   isLoading,
   error,
+  selectedNodeId,
+  onNodeClick,
   onNodeDoubleClick,
+  onPaneClick,
 }: DiagramViewerProps) {
+  const handleNodeClick: NodeMouseHandler = useCallback(
+    (_event, node) => {
+      if (onNodeClick) {
+        const nodeData = node.data as C4NodeData;
+        onNodeClick(node.id, nodeData, node.type ?? "system");
+      }
+    },
+    [onNodeClick],
+  );
+
   const handleNodeDoubleClick: NodeMouseHandler = useCallback(
     (_event, node) => {
       if (onNodeDoubleClick) {
@@ -58,6 +75,17 @@ export function DiagramViewer({
     },
     [onNodeDoubleClick],
   );
+
+  const styledNodes = useMemo(() => {
+    if (!selectedNodeId) return nodes;
+    return nodes.map((node) => ({
+      ...node,
+      style: {
+        ...node.style,
+        opacity: node.id === selectedNodeId ? 1 : 0.5,
+      },
+    }));
+  }, [nodes, selectedNodeId]);
 
   const defaultEdgeOptions = useMemo(
     () => ({
@@ -98,12 +126,14 @@ export function DiagramViewer({
 
   return (
     <ReactFlow
-      nodes={nodes}
+      nodes={styledNodes}
       edges={edges}
       nodeTypes={nodeTypes}
       edgeTypes={edgeTypes}
       defaultEdgeOptions={defaultEdgeOptions}
+      onNodeClick={handleNodeClick}
       onNodeDoubleClick={handleNodeDoubleClick}
+      onPaneClick={onPaneClick}
       fitView
       fitViewOptions={{ padding: 0.2 }}
       minZoom={0.1}

@@ -15,16 +15,27 @@ export interface Project {
 
 export type DiagramLevel = "context" | "container" | "component" | "code";
 
+export interface C4NodeData {
+  label: string;
+  description?: string;
+  technology?: string;
+  kind?: string;
+  packagePath?: string;
+  role?: string;
+  methods?: string[];
+  fields?: string[];
+  dependencies?: string[];
+  signature?: string;
+  parameters?: string[];
+  returnTypes?: string[];
+  [key: string]: unknown;
+}
+
 export interface C4Node {
   id: string;
   type: string;
   position: { x: number; y: number };
-  data: {
-    label: string;
-    description?: string;
-    technology?: string;
-    kind?: string;
-  };
+  data: C4NodeData;
 }
 
 export interface C4Edge {
