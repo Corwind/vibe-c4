@@ -25,15 +25,15 @@ export function DiagramPage() {
     }
   }, [projectId, setCurrentProject]);
 
-  const parentName =
+  const parentId =
     navigationHistory.length > 1
-      ? navigationHistory[navigationHistory.length - 1]?.name
+      ? navigationHistory[navigationHistory.length - 1]?.id
       : undefined;
 
   const { data, isLoading, error } = useDiagram(
     projectId ?? "",
     currentLevel,
-    parentName,
+    parentId,
   );
 
   const nodes = data?.data?.nodes ?? [];

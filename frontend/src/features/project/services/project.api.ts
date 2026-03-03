@@ -45,18 +45,18 @@ export function fetchContainersDiagram(
 
 export function fetchComponentsDiagram(
   projectId: string,
-  containerName: string,
+  containerId: string,
 ): Promise<ApiResponse<DiagramData>> {
   return apiClient.get<ApiResponse<DiagramData>>(
-    `/v1/projects/${projectId}/diagram/containers/${containerName}/components`,
+    `/v1/projects/${projectId}/diagram/containers/${containerId}/components`,
   );
 }
 
 export function fetchCodeDiagram(
   projectId: string,
-  componentName: string,
+  componentId: string,
 ): Promise<ApiResponse<DiagramData>> {
   return apiClient.get<ApiResponse<DiagramData>>(
-    `/v1/projects/${projectId}/diagram/components/${componentName}/code`,
+    `/v1/projects/${projectId}/diagram/components/${componentId}/code`,
   );
 }

@@ -11,7 +11,7 @@ import type { DiagramLevel } from "@/features/project/types/project.types";
 export function useDiagram(
   projectId: string,
   level: DiagramLevel,
-  parentName?: string,
+  parentId?: string,
 ) {
   const contextQuery = useContextDiagram(
     level === "context" ? projectId : "",
@@ -21,11 +21,11 @@ export function useDiagram(
   );
   const componentQuery = useComponentsDiagram(
     level === "component" ? projectId : "",
-    level === "component" ? (parentName ?? "") : "",
+    level === "component" ? (parentId ?? "") : "",
   );
   const codeQuery = useCodeDiagram(
     level === "code" ? projectId : "",
-    level === "code" ? (parentName ?? "") : "",
+    level === "code" ? (parentId ?? "") : "",
   );
 
   switch (level) {
@@ -50,14 +50,14 @@ export function useDiagramNavigation() {
   } = useProjectStore();
 
   const drillDown = useCallback(
-    (nodeName: string, nodeLabel: string) => {
+    (nodeId: string, nodeLabel: string) => {
       const nextLevel = getNextLevel(currentLevel);
       if (!nextLevel) return;
 
       pushNavigation({
         level: nextLevel,
         label: nodeLabel,
-        name: nodeName,
+        id: nodeId,
       });
     },
     [currentLevel, pushNavigation],

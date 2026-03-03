@@ -4,7 +4,7 @@ import type { DiagramLevel, C4NodeData } from "../types/project.types";
 interface BreadcrumbEntry {
   level: DiagramLevel;
   label: string;
-  name?: string;
+  id?: string;
 }
 
 interface ProjectStore {

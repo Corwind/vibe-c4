@@ -77,7 +77,7 @@ describe("ProjectUpload", () => {
 
   it("shows error message when analysis fails", async () => {
     server.use(
-      http.post("http://localhost:3001/api/v1/projects/analyze", () => {
+      http.post("http://localhost:8080/api/v1/projects/analyze", () => {
         return HttpResponse.json(
           { message: "Internal Server Error" },
           { status: 500 },
@@ -101,7 +101,7 @@ describe("ProjectUpload", () => {
 
   it("shows loading state during submission", async () => {
     server.use(
-      http.post("http://localhost:3001/api/v1/projects/analyze", async () => {
+      http.post("http://localhost:8080/api/v1/projects/analyze", async () => {
         await new Promise((resolve) => setTimeout(resolve, 200));
         return HttpResponse.json(
           {

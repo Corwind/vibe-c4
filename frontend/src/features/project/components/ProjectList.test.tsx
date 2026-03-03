@@ -56,7 +56,7 @@ describe("ProjectList", () => {
 
   it("handles error state", async () => {
     server.use(
-      http.get("http://localhost:3001/api/v1/projects", () => {
+      http.get("http://localhost:8080/api/v1/projects", () => {
         return HttpResponse.json(
           { message: "Internal Server Error" },
           { status: 500 },
@@ -73,7 +73,7 @@ describe("ProjectList", () => {
 
   it("shows empty state when no projects exist", async () => {
     server.use(
-      http.get("http://localhost:3001/api/v1/projects", () => {
+      http.get("http://localhost:8080/api/v1/projects", () => {
         return HttpResponse.json({ data: [] });
       }),
     );

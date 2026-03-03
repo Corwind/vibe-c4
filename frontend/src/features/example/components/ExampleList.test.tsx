@@ -25,7 +25,7 @@ describe("ExampleList", () => {
 
   it("handles error state", async () => {
     server.use(
-      http.get("http://localhost:3001/api/examples", () => {
+      http.get("http://localhost:8080/api/examples", () => {
         return HttpResponse.json(
           { message: "Internal Server Error" },
           { status: 500 },

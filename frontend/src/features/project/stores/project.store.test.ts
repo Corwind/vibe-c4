@@ -28,7 +28,7 @@ describe("useProjectStore", () => {
     useProjectStore.getState().pushNavigation({
       level: "container",
       label: "Containers",
-      name: "main-system",
+      id: "main-system",
     });
 
     const state = useProjectStore.getState();
@@ -37,7 +37,7 @@ describe("useProjectStore", () => {
     expect(state.navigationHistory[1]).toEqual({
       level: "container",
       label: "Containers",
-      name: "main-system",
+      id: "main-system",
     });
   });
 

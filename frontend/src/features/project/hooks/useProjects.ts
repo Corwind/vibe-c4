@@ -15,10 +15,10 @@ export const projectKeys = {
   contextDiagram: (id: string) => ["projects", id, "diagram", "context"] as const,
   containersDiagram: (id: string) =>
     ["projects", id, "diagram", "containers"] as const,
-  componentsDiagram: (id: string, containerName: string) =>
-    ["projects", id, "diagram", "containers", containerName, "components"] as const,
-  codeDiagram: (id: string, componentName: string) =>
-    ["projects", id, "diagram", "components", componentName, "code"] as const,
+  componentsDiagram: (id: string, containerId: string) =>
+    ["projects", id, "diagram", "containers", containerId, "components"] as const,
+  codeDiagram: (id: string, componentId: string) =>
+    ["projects", id, "diagram", "components", componentId, "code"] as const,
 };
 
 export function useProjects() {
@@ -57,19 +57,19 @@ export function useContainersDiagram(projectId: string) {
 
 export function useComponentsDiagram(
   projectId: string,
-  containerName: string,
+  containerId: string,
 ) {
   return useQuery({
-    queryKey: projectKeys.componentsDiagram(projectId, containerName),
-    queryFn: () => fetchComponentsDiagram(projectId, containerName),
-    enabled: !!projectId && !!containerName,
+    queryKey: projectKeys.componentsDiagram(projectId, containerId),
+    queryFn: () => fetchComponentsDiagram(projectId, containerId),
+    enabled: !!projectId && !!containerId,
   });
 }
 
-export function useCodeDiagram(projectId: string, componentName: string) {
+export function useCodeDiagram(projectId: string, componentId: string) {
   return useQuery({
-    queryKey: projectKeys.codeDiagram(projectId, componentName),
-    queryFn: () => fetchCodeDiagram(projectId, componentName),
-    enabled: !!projectId && !!componentName,
+    queryKey: projectKeys.codeDiagram(projectId, componentId),
+    queryFn: () => fetchCodeDiagram(projectId, componentId),
+    enabled: !!projectId && !!componentId,
   });
 }
