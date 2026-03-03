@@ -10,8 +10,8 @@ interface PersonNodeData {
 export function PersonNode({ data }: NodeProps) {
   const nodeData = data as PersonNodeData;
   return (
-    <div className="flex min-w-[120px] max-w-[180px] flex-col items-center rounded-lg border-2 border-blue-800 bg-blue-700 px-4 py-3 text-white shadow-lg">
-      <Handle type="target" position={Position.Top} className="!bg-blue-900" />
+    <div className="flex min-w-[120px] max-w-[180px] flex-col items-center rounded-lg border-2 border-green-800 bg-green-700 px-4 py-3 text-white shadow-lg">
+      <Handle type="target" position={Position.Top} className="!bg-green-900" />
       <svg
         className="mb-1 h-8 w-8"
         fill="none"
@@ -28,26 +28,26 @@ export function PersonNode({ data }: NodeProps) {
       </svg>
       <span className="text-sm font-bold">{nodeData.label}</span>
       {nodeData.description && (
-        <p className="mt-1 text-center text-xs text-blue-200">
+        <p className="mt-1 text-center text-xs text-green-200">
           {nodeData.description}
         </p>
       )}
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!bg-blue-900"
+        className="!bg-green-900"
       />
       <Handle
         type="target"
         position={Position.Left}
         id="left"
-        className="!bg-blue-900"
+        className="!bg-green-900"
       />
       <Handle
         type="source"
         position={Position.Right}
         id="right"
-        className="!bg-blue-900"
+        className="!bg-green-900"
       />
     </div>
   );
