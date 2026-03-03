@@ -1,64 +1,80 @@
+import { Link } from "react-router";
 import { PageLayout } from "@/components/layout";
-import { env } from "@/config/env";
 
-const features = [
+const c4Levels = [
   {
-    title: "React 19",
-    description:
-      "The latest version of React with concurrent features and improved performance.",
+    title: "Context",
+    color: "bg-blue-600",
+    description: "System landscape and external actors",
   },
   {
-    title: "TypeScript",
-    description:
-      "Full type safety across the entire codebase with strict mode enabled.",
+    title: "Container",
+    color: "bg-blue-400",
+    description: "Services and data stores",
   },
   {
-    title: "Tailwind CSS v4",
-    description:
-      "Utility-first CSS framework with the new CSS-based configuration.",
+    title: "Component",
+    color: "bg-blue-200",
+    description: "Structs, interfaces, and packages",
   },
   {
-    title: "TanStack Query",
-    description:
-      "Powerful data fetching and caching for seamless server state management.",
-  },
-  {
-    title: "Zustand",
-    description:
-      "Lightweight and flexible client state management with minimal boilerplate.",
-  },
-  {
-    title: "Vitest",
-    description:
-      "Fast, Vite-native testing framework with built-in coverage and mocking.",
+    title: "Code",
+    color: "bg-gray-400",
+    description: "Functions and methods",
   },
 ];
 
 export function HomePage() {
   return (
     <PageLayout>
-      <div className="py-12 text-center">
+      <div className="py-16 text-center">
         <h1 className="text-5xl font-extrabold tracking-tight text-text">
-          {env.appTitle}
+          Vibe C4
         </h1>
         <p className="mx-auto mt-4 max-w-2xl text-lg text-text-muted">
-          A modern React starter built with TypeScript, Tailwind CSS v4,
-          TanStack Query, Zustand, and Vitest. Everything you need to ship fast.
+          Upload a Go project, get interactive C4 architecture diagrams.
+          Automatically analyze your codebase and visualize its structure at
+          every level of abstraction.
         </p>
+        <div className="mt-8">
+          <Link
+            to="/projects"
+            className="inline-flex items-center rounded-lg bg-primary px-6 py-3 text-base font-medium text-white shadow-sm transition-colors hover:bg-primary/90"
+          >
+            Get Started
+          </Link>
+        </div>
       </div>
 
-      <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {features.map((feature) => (
-          <div
-            key={feature.title}
-            className="rounded-xl border border-gray-200 bg-surface p-6 shadow-sm transition-shadow hover:shadow-md"
-          >
-            <h3 className="text-lg font-semibold text-text">{feature.title}</h3>
-            <p className="mt-2 text-sm leading-relaxed text-text-muted">
-              {feature.description}
-            </p>
-          </div>
-        ))}
+      <div className="mt-12">
+        <h2 className="mb-8 text-center text-2xl font-bold text-text">
+          Four Levels of Detail
+        </h2>
+        <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
+          {c4Levels.map((level, index) => (
+            <div key={level.title} className="flex items-center gap-4">
+              <div className="flex w-40 flex-col items-center rounded-xl border border-gray-200 bg-surface p-5 shadow-sm">
+                <div
+                  className={`mb-3 h-3 w-3 rounded-full ${level.color}`}
+                />
+                <span className="text-lg font-semibold text-text">
+                  {level.title}
+                </span>
+                <span className="mt-1 text-center text-xs text-text-muted">
+                  {level.description}
+                </span>
+              </div>
+              {index < c4Levels.length - 1 && (
+                <span
+                  className="hidden text-2xl font-light text-gray-400 sm:block"
+                  aria-hidden="true"
+                >
+                  {"\u2192"}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </PageLayout>
   );
