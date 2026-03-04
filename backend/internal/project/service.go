@@ -4,10 +4,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"log"
 	"sync"
 
 	"github.com/Corwind/vibe-c4/backend/internal/analyzer"
 	"github.com/Corwind/vibe-c4/backend/internal/c4model"
+	"github.com/Corwind/vibe-c4/backend/internal/llm"
 )
 
 // Status represents the analysis status of a project.
@@ -22,29 +24,44 @@ const (
 
 // Project holds project metadata and its C4 model.
 type Project struct {
-	ID     string        `json:"id"`
-	Name   string        `json:"name"`
-	Path   string        `json:"path"`
-	Status Status        `json:"status"`
+	ID     string           `json:"id"`
+	Name   string           `json:"name"`
+	Path   string           `json:"path"`
+	Status Status           `json:"status"`
 	Model  *c4model.C4Model `json:"model,omitempty"`
-	Error  string        `json:"error,omitempty"`
+	Error  string           `json:"error,omitempty"`
+}
+
+// ServiceOption configures the project Service.
+type ServiceOption func(*Service)
+
+// WithInterpreter adds an AI interpreter to the service pipeline.
+func WithInterpreter(i llm.Interpreter) ServiceOption {
+	return func(s *Service) {
+		s.interpreter = i
+	}
 }
 
 // Service manages projects and their analysis.
 type Service struct {
-	mu       sync.RWMutex
-	projects map[string]*Project
-	analyzer analyzer.Analyzer
-	builder  c4model.ModelBuilder
+	mu          sync.RWMutex
+	projects    map[string]*Project
+	analyzer    analyzer.Analyzer
+	builder     c4model.ModelBuilder
+	interpreter llm.Interpreter
 }
 
 // NewService creates a new project service.
-func NewService(a analyzer.Analyzer, b c4model.ModelBuilder) *Service {
-	return &Service{
+func NewService(a analyzer.Analyzer, b c4model.ModelBuilder, opts ...ServiceOption) *Service {
+	s := &Service{
 		projects: make(map[string]*Project),
 		analyzer: a,
 		builder:  b,
 	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // AnalyzeFromPath triggers analysis of a Go project at the given path.
@@ -71,7 +88,9 @@ func (s *Service) AnalyzeFromPath(ctx context.Context, projectPath string, name 
 		return p, fmt.Errorf("analysis failed: %w", err)
 	}
 
-	model, err := s.builder.BuildFromAnalysis(result)
+	builder := s.builderForResult(ctx, result, projectPath)
+
+	model, err := builder.BuildFromAnalysis(result)
 	if err != nil {
 		s.mu.Lock()
 		p.Status = StatusFailed
@@ -88,6 +107,25 @@ func (s *Service) AnalyzeFromPath(ctx context.Context, projectPath string, name 
 	s.mu.Unlock()
 
 	return p, nil
+}
+
+// builderForResult returns an AI-enhanced builder if an interpreter is configured and succeeds,
+// otherwise falls back to the default static builder.
+func (s *Service) builderForResult(ctx context.Context, result *analyzer.AnalysisResult, projectPath string) c4model.ModelBuilder {
+	if s.interpreter == nil {
+		return s.builder
+	}
+
+	preparer := &llm.ContextPreparer{}
+	input := preparer.Prepare(result, projectPath)
+
+	interpretation, err := s.interpreter.Interpret(ctx, input)
+	if err != nil {
+		log.Printf("AI interpretation failed, falling back to static builder: %v", err)
+		return s.builder
+	}
+
+	return c4model.NewAIModelBuilder(interpretation)
 }
 
 // Get returns a project by ID.

@@ -8,6 +8,7 @@ import (
 	"github.com/Corwind/vibe-c4/backend/internal/analyzer"
 	"github.com/Corwind/vibe-c4/backend/internal/api"
 	"github.com/Corwind/vibe-c4/backend/internal/c4model"
+	"github.com/Corwind/vibe-c4/backend/internal/llm"
 	"github.com/Corwind/vibe-c4/backend/internal/project"
 )
 
@@ -19,7 +20,26 @@ func main() {
 
 	a := analyzer.NewGoAnalyzer()
 	b := c4model.NewModelBuilder()
-	ps := project.NewService(a, b)
+
+	var opts []project.ServiceOption
+
+	if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
+		config := llm.ClaudeConfig{
+			APIKey: apiKey,
+		}
+		if model := os.Getenv("CLAUDE_MODEL"); model != "" {
+			config.Model = model
+		}
+		adapter := llm.NewClaudeAdapter(config)
+		opts = append(opts, project.WithInterpreter(adapter))
+		modelName := config.Model
+		if modelName == "" {
+			modelName = "claude-sonnet-4-20250514"
+		}
+		log.Printf("AI interpretation enabled (model: %s)", modelName)
+	}
+
+	ps := project.NewService(a, b, opts...)
 
 	router := api.NewDefaultRouter(ps)
 

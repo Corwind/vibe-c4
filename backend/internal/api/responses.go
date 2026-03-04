@@ -81,6 +81,9 @@ func buildContextDiagram(model *c4model.C4Model) DiagramResponse {
 		if sys.External {
 			nodeType = "externalSystem"
 		}
+		if sys.SystemKind == "actor" {
+			nodeType = "person"
+		}
 		nodes = append(nodes, Node{
 			ID:       sys.ID,
 			Type:     nodeType,

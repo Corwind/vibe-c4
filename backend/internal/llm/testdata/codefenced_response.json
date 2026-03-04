@@ -1,0 +1,8 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "```json\n{\"system_context\":{\"name\":\"TestApp\",\"description\":\"A test application\",\"actors\":[{\"name\":\"User\",\"description\":\"End user\",\"type\":\"person\"}],\"external_systems\":[{\"name\":\"PostgreSQL\",\"description\":\"Primary database\",\"technology\":\"PostgreSQL\",\"kind\":\"database\"}]},\"containers\":[{\"id\":\"test-app\",\"name\":\"TestApp\",\"description\":\"Main service\",\"technology\":\"Go\",\"type\":\"service\"}],\"components\":[{\"id\":\"user-controller\",\"name\":\"User Controller\",\"description\":\"Handles user requests\",\"role\":\"controller\",\"container_id\":\"test-app\"}],\"relationships\":[{\"source_id\":\"user-controller\",\"target_id\":\"test-app\",\"description\":\"Handles HTTP requests\",\"level\":\"component\"}]}\n```"
+    }
+  ]
+}
