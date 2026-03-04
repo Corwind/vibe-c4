@@ -273,7 +273,7 @@ func (h *Handlers) handleGetDiagram(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, p.Model)
+	writeJSON(w, http.StatusOK, map[string]any{"data": p.Model})
 }
 
 func (h *Handlers) handleGetContext(w http.ResponseWriter, r *http.Request) {
@@ -289,7 +289,7 @@ func (h *Handlers) handleGetContext(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, buildContextDiagram(p.Model))
+	writeJSON(w, http.StatusOK, map[string]any{"data": buildContextDiagram(p.Model)})
 }
 
 func (h *Handlers) handleGetContainers(w http.ResponseWriter, r *http.Request) {
@@ -305,7 +305,7 @@ func (h *Handlers) handleGetContainers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, buildContainerDiagram(p.Model))
+	writeJSON(w, http.StatusOK, map[string]any{"data": buildContainerDiagram(p.Model)})
 }
 
 func (h *Handlers) handleGetComponents(w http.ResponseWriter, r *http.Request) {
@@ -329,7 +329,7 @@ func (h *Handlers) handleGetComponents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, buildComponentDiagram(p.Model, containerID))
+	writeJSON(w, http.StatusOK, map[string]any{"data": buildComponentDiagram(p.Model, containerID)})
 }
 
 func (h *Handlers) handleGetCode(w http.ResponseWriter, r *http.Request) {
@@ -352,7 +352,7 @@ func (h *Handlers) handleGetCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, buildCodeDiagram(p.Model, componentID))
+	writeJSON(w, http.StatusOK, map[string]any{"data": buildCodeDiagram(p.Model, componentID)})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

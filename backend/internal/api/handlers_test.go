@@ -52,6 +52,14 @@ type wrappedAnalyzeResponse struct {
 	Data api.AnalyzeResponse `json:"data"`
 }
 
+type wrappedModelResponse struct {
+	Data c4model.C4Model `json:"data"`
+}
+
+type wrappedDiagramResponse struct {
+	Data api.DiagramResponse `json:"data"`
+}
+
 func analyzeProject(t *testing.T, router http.Handler) string {
 	t.Helper()
 	body := map[string]string{
@@ -95,7 +103,7 @@ func TestAnalyze_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, resp.Data.ID)
 	assert.Equal(t, "sample-project", resp.Data.Name)
-	assert.Equal(t, "complete", resp.Data.Status)
+	assert.Equal(t, "completed", resp.Data.Status)
 }
 
 func TestAnalyze_MissingPath(t *testing.T) {
@@ -138,11 +146,11 @@ func TestGetDiagram_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	var model c4model.C4Model
-	err := json.Unmarshal(rec.Body.Bytes(), &model)
+	var resp wrappedModelResponse
+	err := json.Unmarshal(rec.Body.Bytes(), &resp)
 	require.NoError(t, err)
-	assert.NotEmpty(t, model.Systems)
-	assert.NotEmpty(t, model.Containers)
+	assert.NotEmpty(t, resp.Data.Systems)
+	assert.NotEmpty(t, resp.Data.Containers)
 }
 
 func TestGetDiagram_NotFound(t *testing.T) {
@@ -167,10 +175,10 @@ func TestGetContext_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	var diagram api.DiagramResponse
-	err := json.Unmarshal(rec.Body.Bytes(), &diagram)
+	var resp wrappedDiagramResponse
+	err := json.Unmarshal(rec.Body.Bytes(), &resp)
 	require.NoError(t, err)
-	assert.NotEmpty(t, diagram.Nodes, "context diagram should have nodes")
+	assert.NotEmpty(t, resp.Data.Nodes, "context diagram should have nodes")
 }
 
 func TestGetContainers_Success(t *testing.T) {
@@ -184,11 +192,11 @@ func TestGetContainers_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	var diagram api.DiagramResponse
-	err := json.Unmarshal(rec.Body.Bytes(), &diagram)
+	var resp wrappedDiagramResponse
+	err := json.Unmarshal(rec.Body.Bytes(), &resp)
 	require.NoError(t, err)
-	assert.NotEmpty(t, diagram.Nodes, "container diagram should have nodes")
-	assert.NotEmpty(t, diagram.Edges, "container diagram should have edges")
+	assert.NotEmpty(t, resp.Data.Nodes, "container diagram should have nodes")
+	assert.NotEmpty(t, resp.Data.Edges, "container diagram should have edges")
 }
 
 func getModel(t *testing.T, router http.Handler, projectID string) *c4model.C4Model {
@@ -197,10 +205,10 @@ func getModel(t *testing.T, router http.Handler, projectID string) *c4model.C4Mo
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code)
-	var model c4model.C4Model
-	err := json.Unmarshal(rec.Body.Bytes(), &model)
+	var resp wrappedModelResponse
+	err := json.Unmarshal(rec.Body.Bytes(), &resp)
 	require.NoError(t, err)
-	return &model
+	return &resp.Data
 }
 
 func TestGetComponents_Success(t *testing.T) {
@@ -225,10 +233,10 @@ func TestGetComponents_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	var diagram api.DiagramResponse
-	err := json.Unmarshal(rec.Body.Bytes(), &diagram)
+	var resp wrappedDiagramResponse
+	err := json.Unmarshal(rec.Body.Bytes(), &resp)
 	require.NoError(t, err)
-	assert.NotEmpty(t, diagram.Nodes, "component diagram should have nodes")
+	assert.NotEmpty(t, resp.Data.Nodes, "component diagram should have nodes")
 }
 
 func TestGetComponents_ContainerNotFound(t *testing.T) {
@@ -265,10 +273,10 @@ func TestGetCode_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	var diagram api.DiagramResponse
-	err := json.Unmarshal(rec.Body.Bytes(), &diagram)
+	var codeResp wrappedDiagramResponse
+	err := json.Unmarshal(rec.Body.Bytes(), &codeResp)
 	require.NoError(t, err)
-	assert.NotEmpty(t, diagram.Nodes, "code diagram should have nodes")
+	assert.NotEmpty(t, codeResp.Data.Nodes, "code diagram should have nodes")
 }
 
 func TestGetCode_ComponentNotFound(t *testing.T) {
@@ -316,7 +324,7 @@ func TestListProjects_WithProjects(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, resp.Data, 1)
 	assert.Equal(t, "sample-project", resp.Data[0].Name)
-	assert.Equal(t, "complete", resp.Data[0].Status)
+	assert.Equal(t, "completed", resp.Data[0].Status)
 }
 
 func TestAnalyzeUpload_Success(t *testing.T) {
@@ -346,7 +354,7 @@ func TestAnalyzeUpload_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, resp.Data.ID)
 	assert.Equal(t, "sample-project", resp.Data.Name)
-	assert.Equal(t, "complete", resp.Data.Status)
+	assert.Equal(t, "completed", resp.Data.Status)
 }
 
 func TestAnalyzeUpload_MissingFile(t *testing.T) {
