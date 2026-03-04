@@ -79,7 +79,7 @@ func buildContextDiagram(model *c4model.C4Model) DiagramResponse {
 	for i, sys := range model.Systems {
 		nodeType := "system"
 		if sys.External {
-			nodeType = "externalSystem"
+			nodeType = "external"
 		}
 		if sys.SystemKind == "actor" {
 			nodeType = "person"
@@ -194,7 +194,7 @@ func buildComponentDiagram(model *c4model.C4Model, containerID string) DiagramRe
 			if comp != nil {
 				nodes = append(nodes, Node{
 					ID:       comp.ID,
-					Type:     "ghostComponent",
+					Type:     "component",
 					Position: Position{X: float64(len(nodes) % 3 * 250), Y: float64(len(nodes) / 3 * 180)},
 					Data: NodeData{
 						Label:      comp.Name,
@@ -211,7 +211,7 @@ func buildComponentDiagram(model *c4model.C4Model, containerID string) DiagramRe
 			if comp != nil {
 				nodes = append(nodes, Node{
 					ID:       comp.ID,
-					Type:     "ghostComponent",
+					Type:     "component",
 					Position: Position{X: float64(len(nodes) % 3 * 250), Y: float64(len(nodes) / 3 * 180)},
 					Data: NodeData{
 						Label:      comp.Name,
