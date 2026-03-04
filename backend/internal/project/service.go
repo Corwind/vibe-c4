@@ -98,6 +98,17 @@ func (s *Service) Get(id string) (*Project, bool) {
 	return p, ok
 }
 
+// List returns all projects.
+func (s *Service) List() []*Project {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	projects := make([]*Project, 0, len(s.projects))
+	for _, p := range s.projects {
+		projects = append(projects, p)
+	}
+	return projects
+}
+
 func generateID(path string) string {
 	h := sha256.Sum256([]byte(path))
 	return fmt.Sprintf("%x", h[:8])

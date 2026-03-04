@@ -30,6 +30,7 @@ func NewRouter(handlers ...*Handlers) *chi.Mux {
 
 	if len(handlers) > 0 {
 		h := handlers[0]
+		r.Get("/api/v1/projects", h.handleListProjects)
 		r.Post("/api/v1/projects/analyze", h.handleAnalyze)
 		r.Get("/api/v1/projects/{id}/diagram", h.handleGetDiagram)
 		r.Get("/api/v1/projects/{id}/diagram/context", h.handleGetContext)

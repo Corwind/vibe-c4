@@ -42,8 +42,9 @@ type DiagramResponse struct {
 
 // AnalyzeRequest is the JSON body for project analysis.
 type AnalyzeRequest struct {
-	Path string `json:"path"`
-	Name string `json:"name"`
+	Path   string `json:"path"`
+	Name   string `json:"name"`
+	GitURL string `json:"gitUrl"`
 }
 
 // AnalyzeResponse is returned after triggering analysis.
@@ -51,6 +52,19 @@ type AnalyzeResponse struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
 	Status string `json:"status"`
+}
+
+// ProjectResponse is returned for a single project in list results.
+type ProjectResponse struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Source string `json:"source"`
+	Status string `json:"status"`
+}
+
+// ListProjectsResponse wraps the project list.
+type ListProjectsResponse struct {
+	Data []ProjectResponse `json:"data"`
 }
 
 // buildContextDiagram builds the Level 1 (System Context) diagram.
