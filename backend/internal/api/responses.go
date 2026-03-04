@@ -10,15 +10,21 @@ type Position struct {
 
 // NodeData holds the payload for a React Flow node.
 type NodeData struct {
-	Label           string `json:"label"`
-	Description     string `json:"description,omitempty"`
-	Technology      string `json:"technology,omitempty"`
-	C4Type          string `json:"c4Type"`
-	External        bool   `json:"external,omitempty"`
-	IsEntrypoint    bool   `json:"isEntrypoint,omitempty"`
-	EntrypointKind  string `json:"entrypointKind,omitempty"`
-	EntrypointRoute string `json:"entrypointRoute,omitempty"`
-	SystemKind      string `json:"systemKind,omitempty"`
+	Label           string   `json:"label"`
+	Description     string   `json:"description,omitempty"`
+	Technology      string   `json:"technology,omitempty"`
+	C4Type          string   `json:"c4Type"`
+	External        bool     `json:"external,omitempty"`
+	IsEntrypoint    bool     `json:"isEntrypoint,omitempty"`
+	EntrypointKind  string   `json:"entrypointKind,omitempty"`
+	EntrypointRoute string   `json:"entrypointRoute,omitempty"`
+	SystemKind      string   `json:"systemKind,omitempty"`
+	Role            string   `json:"role,omitempty"`
+	PackagePath     string   `json:"packagePath,omitempty"`
+	Methods         []string `json:"methods,omitempty"`
+	Fields          []string `json:"fields,omitempty"`
+	Dependencies    []string `json:"dependencies,omitempty"`
+	Kind            string   `json:"kind,omitempty"`
 }
 
 // Node represents a React Flow node.
@@ -31,11 +37,12 @@ type Node struct {
 
 // Edge represents a React Flow edge.
 type Edge struct {
-	ID       string `json:"id"`
-	Source   string `json:"source"`
-	Target   string `json:"target"`
-	Label    string `json:"label,omitempty"`
-	Animated bool   `json:"animated,omitempty"`
+	ID         string `json:"id"`
+	Source     string `json:"source"`
+	Target     string `json:"target"`
+	Label      string `json:"label,omitempty"`
+	Animated   bool   `json:"animated,omitempty"`
+	Technology string `json:"technology,omitempty"`
 }
 
 // DiagramResponse is the common response for all diagram level endpoints.
@@ -102,10 +109,11 @@ func buildContextDiagram(model *c4model.C4Model) DiagramResponse {
 		// Only include system-level relationships
 		if model.FindSystem(rel.SourceID) != nil && model.FindSystem(rel.TargetID) != nil {
 			edges = append(edges, Edge{
-				ID:     "edge-" + rel.SourceID + "-" + rel.TargetID,
-				Source: rel.SourceID,
-				Target: rel.TargetID,
-				Label:  rel.Description,
+				ID:         "edge-" + rel.SourceID + "-" + rel.TargetID,
+				Source:     rel.SourceID,
+				Target:     rel.TargetID,
+				Label:      rel.Description,
+				Technology: rel.Technology,
 			})
 		}
 	}
@@ -126,9 +134,10 @@ func buildContainerDiagram(model *c4model.C4Model) DiagramResponse {
 			Type:     "container",
 			Position: Position{X: float64(col * 300), Y: float64(row * 200)},
 			Data: NodeData{
-				Label:      c.Name,
-				Technology: c.Technology,
-				C4Type:     "container",
+				Label:       c.Name,
+				Description: c.Description,
+				Technology:  c.Technology,
+				C4Type:      "container",
 			},
 		})
 	}
@@ -136,11 +145,12 @@ func buildContainerDiagram(model *c4model.C4Model) DiagramResponse {
 	for _, rel := range model.Relationships {
 		if model.FindContainer(rel.SourceID) != nil && model.FindContainer(rel.TargetID) != nil {
 			edges = append(edges, Edge{
-				ID:       "edge-" + rel.SourceID + "-" + rel.TargetID,
-				Source:   rel.SourceID,
-				Target:   rel.TargetID,
-				Label:    rel.Description,
-				Animated: true,
+				ID:         "edge-" + rel.SourceID + "-" + rel.TargetID,
+				Source:     rel.SourceID,
+				Target:     rel.TargetID,
+				Label:      rel.Description,
+				Animated:   true,
+				Technology: rel.Technology,
 			})
 		}
 	}
@@ -159,17 +169,32 @@ func buildComponentDiagram(model *c4model.C4Model, containerID string) DiagramRe
 		componentIDs[comp.ID] = true
 		col := i % 3
 		row := i / 3
+
+		// Collect dependency names from outgoing relationships.
+		var deps []string
+		for _, rel := range model.RelationshipsFrom(comp.ID) {
+			if target := model.FindComponent(rel.TargetID); target != nil {
+				deps = append(deps, target.Name)
+			}
+		}
+
 		nodes = append(nodes, Node{
 			ID:       comp.ID,
 			Type:     "component",
 			Position: Position{X: float64(col * 250), Y: float64(row * 180)},
 			Data: NodeData{
 				Label:           comp.Name,
+				Description:     comp.Description,
 				Technology:      comp.Technology,
 				C4Type:          string(comp.Type),
 				IsEntrypoint:    comp.IsEntrypoint,
 				EntrypointKind:  comp.EntrypointKind,
 				EntrypointRoute: comp.EntrypointRoute,
+				Role:            comp.Role,
+				PackagePath:     comp.PackagePath,
+				Methods:         comp.Methods,
+				Fields:          comp.Fields,
+				Dependencies:    deps,
 			},
 		})
 	}
@@ -224,11 +249,12 @@ func buildComponentDiagram(model *c4model.C4Model, containerID string) DiagramRe
 		}
 
 		edges = append(edges, Edge{
-			ID:       "edge-" + rel.SourceID + "-" + rel.TargetID,
-			Source:   rel.SourceID,
-			Target:   rel.TargetID,
-			Label:    rel.Description,
-			Animated: rel.Description == "implements",
+			ID:         "edge-" + rel.SourceID + "-" + rel.TargetID,
+			Source:     rel.SourceID,
+			Target:     rel.TargetID,
+			Label:      rel.Description,
+			Animated:   rel.Description == "implements",
+			Technology: rel.Technology,
 		})
 	}
 
@@ -250,6 +276,7 @@ func buildCodeDiagram(model *c4model.C4Model, componentID string) DiagramRespons
 			Data: NodeData{
 				Label:  ce.Name,
 				C4Type: string(ce.Type),
+				Kind:   string(ce.Type),
 			},
 		})
 	}

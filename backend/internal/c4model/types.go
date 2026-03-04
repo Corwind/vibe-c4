@@ -69,6 +69,10 @@ type Component struct {
 	IsEntrypoint    bool          `json:"is_entrypoint,omitempty"`
 	EntrypointKind  string        `json:"entrypoint_kind,omitempty"`
 	EntrypointRoute string        `json:"entrypoint_route,omitempty"`
+	Role            string        `json:"role,omitempty"`
+	PackagePath     string        `json:"package_path,omitempty"`
+	Methods         []string      `json:"methods,omitempty"`
+	Fields          []string      `json:"fields,omitempty"`
 }
 
 // ComponentType categorizes what kind of Go construct a component represents.

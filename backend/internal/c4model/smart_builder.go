@@ -28,6 +28,7 @@ func (b *SmartModelBuilder) BuildFromAnalysis(result *analyzer.AnalysisResult) (
 	pkgToContainer := b.buildContainers(result, model)
 	b.buildComponents(result, model, pkgToContainer)
 	b.buildCodeElements(result, model)
+	b.enrichRelationships(result, model)
 
 	return model, nil
 }
@@ -216,6 +217,10 @@ func (b *SmartModelBuilder) buildComponents(result *analyzer.AnalysisResult, mod
 				Type:        ComponentTypeStruct,
 				Technology:  "Go " + string(role),
 				ContainerID: containerID,
+				Role:        string(role),
+				PackagePath: pkg.ImportPath,
+				Methods:     FormatMethodSignatures(s.Methods),
+				Fields:      FormatFieldDescriptors(s.Fields),
 			})
 
 			b.addComponentToContainer(model, containerID, compID)
@@ -231,13 +236,12 @@ func (b *SmartModelBuilder) buildComponents(result *analyzer.AnalysisResult, mod
 				Type:        ComponentTypeInterface,
 				Technology:  "Go interface",
 				ContainerID: containerID,
+				PackagePath: pkg.ImportPath,
+				Methods:     FormatMethodSignatures(iface.Methods),
 			})
 			b.addComponentToContainer(model, containerID, compID)
 		}
 	}
-
-	b.buildComponentCallRelationships(result, model)
-	b.buildInterfaceImplRelationships(result, model)
 }
 
 // markComponentEntrypoints marks a component as an entrypoint if its struct has methods in entrypoints.
@@ -306,9 +310,14 @@ func (b *SmartModelBuilder) addComponentInfraRelationships(structName, pkgPath s
 }
 
 // buildComponentCallRelationships creates component-to-component relationships from the call graph.
+// It collects callee function names per source→target pair to produce descriptions like "calls GetUser, FindByID".
 func (b *SmartModelBuilder) buildComponentCallRelationships(result *analyzer.AnalysisResult, model *C4Model) {
-	seen := make(map[string]bool)
 	modulePath := result.Module.ModulePath
+
+	// Collect callee function names per source→target pair.
+	type pairKey struct{ source, target string }
+	pairFuncs := make(map[pairKey][]string)
+	pairOrder := make([]pairKey, 0)
 
 	for _, call := range result.CallGraph {
 		if !strings.HasPrefix(call.CallerPkg, modulePath) || !strings.HasPrefix(call.CalleePkg, modulePath) {
@@ -329,16 +338,21 @@ func (b *SmartModelBuilder) buildComponentCallRelationships(result *analyzer.Ana
 			continue
 		}
 
-		pairKey := sourceID + "->" + targetID
-		if seen[pairKey] {
-			continue
+		key := pairKey{sourceID, targetID}
+		if _, exists := pairFuncs[key]; !exists {
+			pairOrder = append(pairOrder, key)
 		}
-		seen[pairKey] = true
+		pairFuncs[key] = append(pairFuncs[key], call.CalleeFunc)
+	}
+
+	for _, key := range pairOrder {
+		funcs := dedupStrings(pairFuncs[key])
+		desc := "calls " + strings.Join(funcs, ", ")
 
 		model.Relationships = append(model.Relationships, Relationship{
-			SourceID:    sourceID,
-			TargetID:    targetID,
-			Description: "calls",
+			SourceID:    key.source,
+			TargetID:    key.target,
+			Description: desc,
 			Technology:  "Go",
 			Level:       "component",
 		})
@@ -424,6 +438,205 @@ func (b *SmartModelBuilder) addComponentToContainer(model *C4Model, containerID,
 			return
 		}
 	}
+}
+
+// enrichRelationships centralizes all relationship building after components exist.
+func (b *SmartModelBuilder) enrichRelationships(result *analyzer.AnalysisResult, model *C4Model) {
+	b.buildComponentCallRelationships(result, model)
+	b.buildInterfaceImplRelationships(result, model)
+	b.buildFieldDependencyRelationships(result, model)
+	b.enrichFromConstructors(result, model)
+}
+
+// buildFieldDependencyRelationships scans each component's field types,
+// resolves internal struct references to component IDs, and creates "depends on"
+// (or "extends" for embedded) relationships.
+func (b *SmartModelBuilder) buildFieldDependencyRelationships(result *analyzer.AnalysisResult, model *C4Model) {
+	// Build lookup maps.
+	pkgNameToPath := make(map[string]string)
+	for _, pkg := range result.Packages {
+		pkgNameToPath[pkg.Name] = pkg.ImportPath
+	}
+
+	structToCompID := make(map[string]string)
+	for _, comp := range model.Components {
+		structToCompID[comp.PackagePath+"/"+comp.Name] = comp.ID
+	}
+
+	seen := make(map[string]bool)
+
+	for _, pkg := range result.Packages {
+		for _, s := range pkg.Structs {
+			sourceID := structToCompID[pkg.ImportPath+"/"+s.Name]
+			if sourceID == "" {
+				continue
+			}
+
+			for _, f := range s.Fields {
+				targetID := ResolveFieldTypeToComponentID(f.Type, pkg.ImportPath, pkgNameToPath, structToCompID)
+				if targetID == "" || targetID == sourceID {
+					continue
+				}
+
+				pairKey := sourceID + "->" + targetID
+				if seen[pairKey] {
+					continue
+				}
+				seen[pairKey] = true
+
+				desc := "depends on"
+				if f.Embedded {
+					desc = "extends"
+				}
+
+				model.Relationships = append(model.Relationships, Relationship{
+					SourceID:    sourceID,
+					TargetID:    targetID,
+					Description: desc,
+					Technology:  "Go",
+					Level:       "component",
+				})
+			}
+		}
+	}
+}
+
+// enrichFromConstructors detects New* functions, resolves their parameter types
+// to components, and adds "depends on" relationships not already covered.
+func (b *SmartModelBuilder) enrichFromConstructors(result *analyzer.AnalysisResult, model *C4Model) {
+	pkgNameToPath := make(map[string]string)
+	for _, pkg := range result.Packages {
+		pkgNameToPath[pkg.Name] = pkg.ImportPath
+	}
+
+	structToCompID := make(map[string]string)
+	for _, comp := range model.Components {
+		structToCompID[comp.PackagePath+"/"+comp.Name] = comp.ID
+	}
+
+	// Build set of existing relationships for dedup.
+	existingRels := make(map[string]bool)
+	for _, r := range model.Relationships {
+		existingRels[r.SourceID+"->"+r.TargetID] = true
+	}
+
+	for _, pkg := range result.Packages {
+		for _, fn := range pkg.Functions {
+			if !strings.HasPrefix(fn.Name, "New") {
+				continue
+			}
+
+			// The return type of a New* function tells us which component it constructs.
+			// Try to find the component in this package.
+			structName := strings.TrimPrefix(fn.Name, "New")
+			sourceID := structToCompID[pkg.ImportPath+"/"+structName]
+			if sourceID == "" {
+				continue
+			}
+
+			// Resolve parameter types to components.
+			for _, param := range fn.Params {
+				targetID := ResolveFieldTypeToComponentID(param, pkg.ImportPath, pkgNameToPath, structToCompID)
+				if targetID == "" || targetID == sourceID {
+					continue
+				}
+
+				pairKey := sourceID + "->" + targetID
+				if existingRels[pairKey] {
+					continue
+				}
+				existingRels[pairKey] = true
+
+				model.Relationships = append(model.Relationships, Relationship{
+					SourceID:    sourceID,
+					TargetID:    targetID,
+					Description: "depends on",
+					Technology:  "Go",
+					Level:       "component",
+				})
+			}
+		}
+	}
+}
+
+// ResolveFieldTypeToComponentID strips pointer/slice prefixes, resolves
+// qualified (pkg.Type) and unqualified type names to component IDs.
+func ResolveFieldTypeToComponentID(typeName, currentPkgPath string, pkgNameToPath map[string]string, structToCompID map[string]string) string {
+	// Strip pointer and slice prefixes.
+	t := typeName
+	for strings.HasPrefix(t, "*") || strings.HasPrefix(t, "[]") {
+		t = strings.TrimPrefix(t, "*")
+		t = strings.TrimPrefix(t, "[]")
+	}
+
+	// Qualified type: "pkg.Type"
+	if strings.Contains(t, ".") {
+		parts := strings.SplitN(t, ".", 2)
+		pkgName := parts[0]
+		structName := parts[1]
+
+		pkgPath, ok := pkgNameToPath[pkgName]
+		if !ok {
+			return "" // external package, not in our model
+		}
+		return structToCompID[pkgPath+"/"+structName]
+	}
+
+	// Unqualified type: look in current package.
+	if id := structToCompID[currentPkgPath+"/"+t]; id != "" {
+		return id
+	}
+
+	return ""
+}
+
+// FormatMethodSignatures formats method info into human-readable signatures.
+func FormatMethodSignatures(methods []analyzer.MethodInfo) []string {
+	if len(methods) == 0 {
+		return nil
+	}
+	sigs := make([]string, 0, len(methods))
+	for _, m := range methods {
+		sig := m.Name + "(" + strings.Join(m.Params, ", ") + ")"
+		if len(m.Returns) > 0 {
+			if len(m.Returns) == 1 {
+				sig += " " + m.Returns[0]
+			} else {
+				sig += " (" + strings.Join(m.Returns, ", ") + ")"
+			}
+		}
+		sigs = append(sigs, sig)
+	}
+	return sigs
+}
+
+// FormatFieldDescriptors formats field info into human-readable descriptors.
+func FormatFieldDescriptors(fields []analyzer.FieldInfo) []string {
+	if len(fields) == 0 {
+		return nil
+	}
+	descs := make([]string, 0, len(fields))
+	for _, f := range fields {
+		if f.Embedded {
+			descs = append(descs, f.Type+" (embedded)")
+		} else {
+			descs = append(descs, f.Name+" "+f.Type)
+		}
+	}
+	return descs
+}
+
+// dedupStrings removes duplicates from a string slice while preserving order.
+func dedupStrings(ss []string) []string {
+	seen := make(map[string]bool, len(ss))
+	result := make([]string, 0, len(ss))
+	for _, s := range ss {
+		if !seen[s] {
+			seen[s] = true
+			result = append(result, s)
+		}
+	}
+	return result
 }
 
 // moduleName extracts a readable name from a module path.

@@ -1,6 +1,7 @@
 package c4model_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Corwind/vibe-c4/backend/internal/analyzer"
@@ -320,7 +321,7 @@ func TestSmartBuilder_ComponentCallRelationships(t *testing.T) {
 
 	var callRels []c4model.Relationship
 	for _, r := range model.Relationships {
-		if r.Description == "calls" && r.Level == "component" {
+		if strings.HasPrefix(r.Description, "calls ") && r.Level == "component" {
 			callRels = append(callRels, r)
 		}
 	}
@@ -387,8 +388,234 @@ func TestSmartBuilder_RelationshipDescriptionsAreMeaningful(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, r := range model.Relationships {
-		// No generic "imports" or "depends on" descriptions
+		// No generic "imports" descriptions
 		assert.NotEqual(t, "imports", r.Description, "should not use 'imports' as description")
-		assert.NotEqual(t, "depends on", r.Description, "should not use 'depends on' as description")
+		// "depends on" is allowed at component level (field-based deps), but not at system/container level
+		if r.Level == "system" || r.Level == "container" {
+			assert.NotEqual(t, "depends on", r.Description, "should not use 'depends on' at %s level", r.Level)
+		}
+	}
+}
+
+// --- Field Dependency Relationships ---
+
+func TestSmartBuilder_FieldDependencyRelationships(t *testing.T) {
+	builder := c4model.NewSmartModelBuilder()
+	model, err := builder.BuildFromAnalysis(smartAnalysisResult())
+	require.NoError(t, err)
+
+	var fieldDeps []c4model.Relationship
+	for _, r := range model.Relationships {
+		if r.Description == "depends on" && r.Level == "component" {
+			fieldDeps = append(fieldDeps, r)
+		}
+	}
+
+	// UserHandler has field "svc *service.UserService" → depends on UserService
+	// UserService has field "repo *repo.UserRepo" → depends on UserRepo
+	require.GreaterOrEqual(t, len(fieldDeps), 2, "should have at least 2 field-based dependency relationships")
+
+	depPairs := make(map[string]bool)
+	for _, r := range fieldDeps {
+		src := model.FindComponent(r.SourceID)
+		tgt := model.FindComponent(r.TargetID)
+		if src != nil && tgt != nil {
+			depPairs[src.Name+"->"+tgt.Name] = true
+		}
+	}
+
+	assert.True(t, depPairs["UserHandler->UserService"], "UserHandler should depend on UserService via field")
+	assert.True(t, depPairs["UserService->UserRepo"], "UserService should depend on UserRepo via field")
+}
+
+func TestSmartBuilder_EmbeddedStructExtendsRelationship(t *testing.T) {
+	result := smartAnalysisResult()
+	// Add a struct with an embedded field
+	result.Packages = append(result.Packages, analyzer.PackageInfo{
+		Name:       "models",
+		ImportPath: "github.com/example/sample-project/internal/models",
+		Dir:        "internal/models",
+		Role:       "internal",
+		GoFiles:    []string{"models.go"},
+		Structs: []analyzer.StructInfo{
+			{
+				Name:     "BaseModel",
+				FilePath: "internal/models/models.go",
+				Line:     5,
+				Methods: []analyzer.MethodInfo{
+					{Name: "GetID", Params: []string{}, Returns: []string{"string"}},
+				},
+			},
+			{
+				Name:     "UserModel",
+				FilePath: "internal/models/models.go",
+				Line:     15,
+				Fields: []analyzer.FieldInfo{
+					{Name: "", Type: "BaseModel", Embedded: true},
+					{Name: "Email", Type: "string"},
+				},
+				Methods: []analyzer.MethodInfo{
+					{Name: "Validate", Params: []string{}, Returns: []string{"error"}},
+				},
+			},
+		},
+	})
+	// Add models package to import graph so it gets grouped into a container.
+	result.ImportGraph["github.com/example/sample-project/cmd/server"] = append(
+		result.ImportGraph["github.com/example/sample-project/cmd/server"],
+		"github.com/example/sample-project/internal/models",
+	)
+
+	builder := c4model.NewSmartModelBuilder()
+	model, err := builder.BuildFromAnalysis(result)
+	require.NoError(t, err)
+
+	var extendsRels []c4model.Relationship
+	for _, r := range model.Relationships {
+		if r.Description == "extends" {
+			extendsRels = append(extendsRels, r)
+		}
+	}
+
+	require.Len(t, extendsRels, 1, "should have exactly 1 extends relationship")
+	src := model.FindComponent(extendsRels[0].SourceID)
+	tgt := model.FindComponent(extendsRels[0].TargetID)
+	require.NotNil(t, src)
+	require.NotNil(t, tgt)
+	assert.Equal(t, "UserModel", src.Name)
+	assert.Equal(t, "BaseModel", tgt.Name)
+}
+
+func TestSmartBuilder_CallRelationshipsIncludeMethodNames(t *testing.T) {
+	builder := c4model.NewSmartModelBuilder()
+	model, err := builder.BuildFromAnalysis(smartAnalysisResult())
+	require.NoError(t, err)
+
+	for _, r := range model.Relationships {
+		if !strings.HasPrefix(r.Description, "calls ") || r.Level != "component" {
+			continue
+		}
+		src := model.FindComponent(r.SourceID)
+		tgt := model.FindComponent(r.TargetID)
+		if src == nil || tgt == nil {
+			continue
+		}
+
+		// Handler→Service should mention "GetUser"
+		if src.Name == "UserHandler" && tgt.Name == "UserService" {
+			assert.Contains(t, r.Description, "GetUser", "call from Handler to Service should include GetUser")
+		}
+		// Service→Repo should mention "FindByID"
+		if src.Name == "UserService" && tgt.Name == "UserRepo" {
+			assert.Contains(t, r.Description, "FindByID", "call from Service to Repo should include FindByID")
+		}
+	}
+}
+
+func TestSmartBuilder_ComponentMetadataPopulated(t *testing.T) {
+	builder := c4model.NewSmartModelBuilder()
+	model, err := builder.BuildFromAnalysis(smartAnalysisResult())
+	require.NoError(t, err)
+
+	for _, comp := range model.Components {
+		switch comp.Name {
+		case "UserHandler":
+			assert.Equal(t, "controller", comp.Role)
+			assert.Equal(t, "github.com/example/sample-project/internal/handler", comp.PackagePath)
+			assert.NotEmpty(t, comp.Methods, "UserHandler should have methods")
+			assert.NotEmpty(t, comp.Fields, "UserHandler should have fields")
+			// Check method format
+			found := false
+			for _, m := range comp.Methods {
+				if strings.HasPrefix(m, "ServeHTTP(") {
+					found = true
+				}
+			}
+			assert.True(t, found, "should have ServeHTTP method signature")
+
+		case "UserService":
+			assert.Equal(t, "service", comp.Role)
+			assert.Equal(t, "github.com/example/sample-project/internal/service", comp.PackagePath)
+			assert.Len(t, comp.Methods, 2, "UserService should have 2 methods")
+
+		case "UserRepo":
+			assert.Equal(t, "repository", comp.Role)
+			assert.Equal(t, "github.com/example/sample-project/internal/repo", comp.PackagePath)
+
+		case "RequestHandler":
+			// Interface — should have methods but no Role (interfaces don't have roles)
+			assert.Empty(t, comp.Role)
+			assert.NotEmpty(t, comp.Methods)
+		}
+	}
+}
+
+func TestSmartBuilder_ContainerDescriptionSet(t *testing.T) {
+	builder := c4model.NewSmartModelBuilder()
+	model, err := builder.BuildFromAnalysis(smartAnalysisResult())
+	require.NoError(t, err)
+
+	for _, c := range model.Containers {
+		assert.NotEmpty(t, c.Description, "container %s should have a description", c.Name)
+	}
+}
+
+func TestFormatMethodSignatures(t *testing.T) {
+	methods := []analyzer.MethodInfo{
+		{Name: "GetUser", Params: []string{"ctx context.Context", "id string"}, Returns: []string{"*User", "error"}},
+		{Name: "Close", Params: nil, Returns: nil},
+		{Name: "Count", Params: nil, Returns: []string{"int"}},
+	}
+
+	sigs := c4model.FormatMethodSignatures(methods)
+	require.Len(t, sigs, 3)
+	assert.Equal(t, "GetUser(ctx context.Context, id string) (*User, error)", sigs[0])
+	assert.Equal(t, "Close()", sigs[1])
+	assert.Equal(t, "Count() int", sigs[2])
+}
+
+func TestFormatFieldDescriptors(t *testing.T) {
+	fields := []analyzer.FieldInfo{
+		{Name: "svc", Type: "*service.UserService"},
+		{Name: "", Type: "BaseModel", Embedded: true},
+		{Name: "db", Type: "*sql.DB"},
+	}
+
+	descs := c4model.FormatFieldDescriptors(fields)
+	require.Len(t, descs, 3)
+	assert.Equal(t, "svc *service.UserService", descs[0])
+	assert.Equal(t, "BaseModel (embedded)", descs[1])
+	assert.Equal(t, "db *sql.DB", descs[2])
+}
+
+func TestResolveFieldTypeToComponentID(t *testing.T) {
+	pkgNameToPath := map[string]string{
+		"service": "github.com/example/project/internal/service",
+		"repo":    "github.com/example/project/internal/repo",
+	}
+	structToCompID := map[string]string{
+		"github.com/example/project/internal/service/UserService": "component-service-userservice",
+		"github.com/example/project/internal/repo/UserRepo":       "component-repo-userrepo",
+		"github.com/example/project/internal/handler/LocalStruct": "component-handler-localstruct",
+	}
+
+	tests := []struct {
+		name       string
+		typeName   string
+		currentPkg string
+		expected   string
+	}{
+		{"qualified pointer", "*service.UserService", "github.com/example/project/internal/handler", "component-service-userservice"},
+		{"qualified slice", "[]repo.UserRepo", "github.com/example/project/internal/handler", "component-repo-userrepo"},
+		{"unqualified local", "LocalStruct", "github.com/example/project/internal/handler", "component-handler-localstruct"},
+		{"primitive type", "string", "github.com/example/project/internal/handler", ""},
+		{"external package", "*http.Client", "github.com/example/project/internal/handler", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := c4model.ResolveFieldTypeToComponentID(tt.typeName, tt.currentPkg, pkgNameToPath, structToCompID)
+			assert.Equal(t, tt.expected, result)
+		})
 	}
 }
