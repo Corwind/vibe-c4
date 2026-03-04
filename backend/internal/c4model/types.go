@@ -32,6 +32,7 @@ type Relationship struct {
 	TargetID    string `json:"target_id"`
 	Description string `json:"description"`
 	Technology  string `json:"technology,omitempty"`
+	Level       string `json:"level,omitempty"`
 }
 
 // System represents a C4 Level 1 system.
@@ -41,6 +42,7 @@ type System struct {
 	Description   string `json:"description,omitempty"`
 	External      bool   `json:"external"`
 	ModulePath    string `json:"module_path,omitempty"`
+	SystemKind    string `json:"system_kind,omitempty"`
 	ContainerIDs  []string `json:"container_ids,omitempty"`
 }
 
@@ -57,13 +59,16 @@ type Container struct {
 
 // Component represents a C4 Level 3 component (an interface, struct, or key function).
 type Component struct {
-	ID           string        `json:"id"`
-	Name         string        `json:"name"`
-	Description  string        `json:"description,omitempty"`
-	Technology   string        `json:"technology,omitempty"`
-	Type         ComponentType `json:"type"`
-	ContainerID  string        `json:"container_id"`
-	CodeElements []string      `json:"code_elements,omitempty"`
+	ID              string        `json:"id"`
+	Name            string        `json:"name"`
+	Description     string        `json:"description,omitempty"`
+	Technology      string        `json:"technology,omitempty"`
+	Type            ComponentType `json:"type"`
+	ContainerID     string        `json:"container_id"`
+	CodeElements    []string      `json:"code_elements,omitempty"`
+	IsEntrypoint    bool          `json:"is_entrypoint,omitempty"`
+	EntrypointKind  string        `json:"entrypoint_kind,omitempty"`
+	EntrypointRoute string        `json:"entrypoint_route,omitempty"`
 }
 
 // ComponentType categorizes what kind of Go construct a component represents.

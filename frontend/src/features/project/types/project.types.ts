@@ -28,6 +28,10 @@ export interface C4NodeData {
   signature?: string;
   parameters?: string[];
   returnTypes?: string[];
+  isEntrypoint?: boolean;
+  entrypointKind?: string;
+  entrypointRoute?: string;
+  systemKind?: string;
   [key: string]: unknown;
 }
 

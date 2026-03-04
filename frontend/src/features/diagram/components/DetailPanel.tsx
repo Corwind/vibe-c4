@@ -61,12 +61,27 @@ export function DetailPanel({ nodeData, nodeType, onClose }: DetailPanelProps) {
       </div>
 
       <div className="space-y-4 px-4 py-4">
-        <h2 className="text-lg font-bold text-text">{nodeData.label}</h2>
+        <h2 className="text-lg font-bold text-text">
+          {nodeData.label}
+          {nodeData.isEntrypoint && (
+            <span className="ml-2 inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+              {nodeData.entrypointKind === "http_handler" ? "HTTP Handler" : nodeData.entrypointKind === "main" ? "Main" : nodeData.entrypointKind || "Entrypoint"}
+            </span>
+          )}
+        </h2>
 
         {nodeData.description && (
           <p className="text-sm leading-relaxed text-text-muted">
             {nodeData.description}
           </p>
+        )}
+
+        {nodeData.entrypointRoute && (
+          <DetailField label="Route" value={nodeData.entrypointRoute} />
+        )}
+
+        {nodeData.systemKind && (
+          <DetailField label="System Kind" value={nodeData.systemKind} />
         )}
 
         {nodeData.technology && (

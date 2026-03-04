@@ -7,11 +7,71 @@ type Analyzer interface {
 	AnalyzeProject(ctx context.Context, projectPath string) (*AnalysisResult, error)
 }
 
+// ExternalDependencyKind categorizes the type of external system interaction.
+type ExternalDependencyKind string
+
+const (
+	ExtKindHTTPHandler    ExternalDependencyKind = "http_handler"
+	ExtKindHTTPClient     ExternalDependencyKind = "http_client"
+	ExtKindKafkaProducer  ExternalDependencyKind = "kafka_producer"
+	ExtKindKafkaConsumer  ExternalDependencyKind = "kafka_consumer"
+	ExtKindDatabase       ExternalDependencyKind = "database"
+	ExtKindGRPCServer     ExternalDependencyKind = "grpc_server"
+	ExtKindGRPCClient     ExternalDependencyKind = "grpc_client"
+)
+
+// FunctionCall represents a detected call from one function to another.
+type FunctionCall struct {
+	CallerPkg      string `json:"caller_pkg"`
+	CallerType     string `json:"caller_type,omitempty"`
+	CallerFunc     string `json:"caller_func"`
+	CalleePkg      string `json:"callee_pkg"`
+	CalleeType     string `json:"callee_type,omitempty"`
+	CalleeFunc     string `json:"callee_func"`
+	CalleePkgAlias string `json:"callee_pkg_alias,omitempty"`
+	FilePath       string `json:"file_path,omitempty"`
+	Line           int    `json:"line,omitempty"`
+}
+
+// ExternalInteraction represents a detected interaction with an external system.
+type ExternalInteraction struct {
+	Kind       ExternalDependencyKind `json:"kind"`
+	PkgPath    string                 `json:"pkg_path"`
+	TypeName   string                 `json:"type_name,omitempty"`
+	FuncName   string                 `json:"func_name"`
+	Detail     string                 `json:"detail,omitempty"`
+	Technology string                 `json:"technology,omitempty"`
+	FilePath   string                 `json:"file_path,omitempty"`
+	Line       int                    `json:"line,omitempty"`
+}
+
+// InterfaceImpl represents a detected struct-implements-interface relationship.
+type InterfaceImpl struct {
+	StructPkg     string `json:"struct_pkg"`
+	StructName    string `json:"struct_name"`
+	InterfacePkg  string `json:"interface_pkg"`
+	InterfaceName string `json:"interface_name"`
+}
+
+// Entrypoint represents a detected application entry point.
+type Entrypoint struct {
+	Kind     string `json:"kind"`
+	PkgPath  string `json:"pkg_path"`
+	FuncName string `json:"func_name"`
+	Route    string `json:"route,omitempty"`
+	FilePath string `json:"file_path,omitempty"`
+	Line     int    `json:"line,omitempty"`
+}
+
 // AnalysisResult holds the full analysis output for a Go project.
 type AnalysisResult struct {
-	Module      ModuleInfo          `json:"module"`
-	Packages    []PackageInfo       `json:"packages"`
-	ImportGraph map[string][]string `json:"import_graph"`
+	Module               ModuleInfo             `json:"module"`
+	Packages             []PackageInfo          `json:"packages"`
+	ImportGraph          map[string][]string    `json:"import_graph"`
+	CallGraph            []FunctionCall         `json:"call_graph,omitempty"`
+	ExternalInteractions []ExternalInteraction  `json:"external_interactions,omitempty"`
+	InterfaceImpls       []InterfaceImpl        `json:"interface_impls,omitempty"`
+	Entrypoints          []Entrypoint           `json:"entrypoints,omitempty"`
 }
 
 // ModuleInfo holds information extracted from go.mod.

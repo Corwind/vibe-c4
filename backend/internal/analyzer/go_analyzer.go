@@ -3,6 +3,7 @@ package analyzer
 import (
 	"context"
 	"fmt"
+	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
@@ -43,10 +44,19 @@ func (a *GoAnalyzer) AnalyzeProject(ctx context.Context, projectPath string) (*A
 
 	importGraph := a.buildImportGraph(packages, moduleInfo.ModulePath)
 
+	callGraph, externals, entrypoints := a.analyzeAllBodies(ctx, absPath, moduleInfo.ModulePath, packages)
+	mainEntrypoints := a.detectMainEntrypoints(packages)
+	entrypoints = append(entrypoints, mainEntrypoints...)
+	interfaceImpls := matchInterfaceImpls(packages)
+
 	return &AnalysisResult{
-		Module:      *moduleInfo,
-		Packages:    packages,
-		ImportGraph: importGraph,
+		Module:               *moduleInfo,
+		Packages:             packages,
+		ImportGraph:          importGraph,
+		CallGraph:            callGraph,
+		ExternalInteractions: externals,
+		InterfaceImpls:       interfaceImpls,
+		Entrypoints:          entrypoints,
 	}, nil
 }
 
@@ -193,6 +203,74 @@ func classifyPackageRole(relDir string) string {
 	default:
 		return "other"
 	}
+}
+
+func (a *GoAnalyzer) analyzeAllBodies(ctx context.Context, projectPath string, modulePath string, packages []PackageInfo) ([]FunctionCall, []ExternalInteraction, []Entrypoint) {
+	var allCalls []FunctionCall
+	var allExternals []ExternalInteraction
+	var allEntrypoints []Entrypoint
+
+	fset := token.NewFileSet()
+
+	for _, pkg := range packages {
+		if ctx.Err() != nil {
+			break
+		}
+
+		pkgDir := filepath.Join(projectPath, pkg.Dir)
+		pkgs, err := parser.ParseDir(fset, pkgDir, func(fi os.FileInfo) bool {
+			return strings.HasSuffix(fi.Name(), ".go") && !strings.HasSuffix(fi.Name(), "_test.go")
+		}, 0)
+		if err != nil {
+			continue
+		}
+
+		for _, astPkg := range pkgs {
+			for _, file := range astPkg.Files {
+				importAliasMap := buildImportAliasMap(file)
+
+				for _, decl := range file.Decls {
+					fn, ok := decl.(*ast.FuncDecl)
+					if !ok {
+						continue
+					}
+
+					callerType := ""
+					if fn.Recv != nil {
+						callerType = receiverTypeName(fn.Recv)
+					}
+
+					calls, externals, entrypoints := analyzeBody(fset, fn, pkg.ImportPath, callerType, modulePath, importAliasMap)
+					allCalls = append(allCalls, calls...)
+					allExternals = append(allExternals, externals...)
+					allEntrypoints = append(allEntrypoints, entrypoints...)
+				}
+			}
+		}
+	}
+
+	return allCalls, allExternals, allEntrypoints
+}
+
+func (a *GoAnalyzer) detectMainEntrypoints(packages []PackageInfo) []Entrypoint {
+	var entrypoints []Entrypoint
+	for _, pkg := range packages {
+		if pkg.Name != "main" {
+			continue
+		}
+		for _, fn := range pkg.Functions {
+			if fn.Name == "main" {
+				entrypoints = append(entrypoints, Entrypoint{
+					Kind:     "main",
+					PkgPath:  pkg.ImportPath,
+					FuncName: "main",
+					FilePath: fn.FilePath,
+					Line:     fn.Line,
+				})
+			}
+		}
+	}
+	return entrypoints
 }
 
 func (a *GoAnalyzer) buildImportGraph(packages []PackageInfo, modulePath string) map[string][]string {

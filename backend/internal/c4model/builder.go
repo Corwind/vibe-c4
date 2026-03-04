@@ -34,6 +34,10 @@ func (b *DefaultModelBuilder) BuildFromAnalysis(result *analyzer.AnalysisResult)
 	b.buildComponents(result, model)
 	b.buildCodeElements(result, model)
 	b.buildRelationships(result, model)
+	b.buildExternalSystems(result, model)
+	b.buildComponentRelationships(result, model)
+	b.buildInterfaceImplRelationships(result, model)
+	b.markEntrypoints(result, model)
 
 	return model, nil
 }
@@ -182,6 +186,7 @@ func (b *DefaultModelBuilder) buildRelationships(result *analyzer.AnalysisResult
 				TargetID:    targetID,
 				Description: "imports",
 				Technology:  "Go import",
+				Level:       "container",
 			})
 		}
 	}
@@ -195,6 +200,7 @@ func (b *DefaultModelBuilder) buildRelationships(result *analyzer.AnalysisResult
 			TargetID:    extSystemID,
 			Description: "depends on",
 			Technology:  "Go module",
+			Level:       "system",
 		})
 	}
 }
@@ -219,6 +225,164 @@ func shortModuleName(modulePath string) string {
 	// Skip domain (github.com) and org, take the rest
 	// e.g. github.com/go-chi/chi/v5 -> chi/v5
 	return strings.Join(parts[2:], "/")
+}
+
+func (b *DefaultModelBuilder) buildExternalSystems(result *analyzer.AnalysisResult, model *C4Model) {
+	mainSystemID := sanitizeID("system", result.Module.ModulePath)
+
+	// Group by kind, deduplicating
+	seenKinds := make(map[string]bool)
+	for _, interaction := range result.ExternalInteractions {
+		kind := interaction.Kind
+
+		// Skip inbound handlers — they are not external systems
+		if kind == analyzer.ExtKindHTTPHandler || kind == analyzer.ExtKindGRPCServer {
+			continue
+		}
+
+		// Normalize kafka producer/consumer to single "kafka" key
+		kindKey := string(kind)
+		if kind == analyzer.ExtKindKafkaProducer || kind == analyzer.ExtKindKafkaConsumer {
+			kindKey = "kafka"
+		}
+
+		if seenKinds[kindKey] {
+			continue
+		}
+		seenKinds[kindKey] = true
+
+		var name, systemKind, description string
+		switch kind {
+		case analyzer.ExtKindDatabase:
+			name = "Database"
+			systemKind = "database"
+			description = "reads from / writes to"
+		case analyzer.ExtKindKafkaProducer, analyzer.ExtKindKafkaConsumer:
+			name = "Message Queue"
+			systemKind = "message_queue"
+			description = "produces to / consumes from"
+		case analyzer.ExtKindHTTPClient:
+			name = "External HTTP API"
+			systemKind = "http_api"
+			description = "calls"
+		case analyzer.ExtKindGRPCClient:
+			name = "gRPC Service"
+			systemKind = "grpc_service"
+			description = "calls"
+		default:
+			continue
+		}
+
+		extSystemID := sanitizeID("system", "external-"+kindKey)
+
+		model.Systems = append(model.Systems, System{
+			ID:         extSystemID,
+			Name:       name,
+			SystemKind: systemKind,
+			External:   true,
+		})
+
+		model.Relationships = append(model.Relationships, Relationship{
+			SourceID:    mainSystemID,
+			TargetID:    extSystemID,
+			Description: description,
+			Technology:  interaction.Technology,
+			Level:       "system",
+		})
+	}
+}
+
+func (b *DefaultModelBuilder) buildComponentRelationships(result *analyzer.AnalysisResult, model *C4Model) {
+	seen := make(map[string]bool)
+	modulePath := result.Module.ModulePath
+
+	for _, call := range result.CallGraph {
+		if !strings.HasPrefix(call.CallerPkg, modulePath) || !strings.HasPrefix(call.CalleePkg, modulePath) {
+			continue
+		}
+		if call.CallerType == "" || call.CalleeType == "" {
+			continue
+		}
+
+		sourceID := sanitizeID("component", call.CallerPkg+"/"+call.CallerType)
+		targetID := sanitizeID("component", call.CalleePkg+"/"+call.CalleeType)
+
+		if sourceID == targetID {
+			continue
+		}
+
+		pairKey := sourceID + "->" + targetID
+		if seen[pairKey] {
+			continue
+		}
+		seen[pairKey] = true
+
+		model.Relationships = append(model.Relationships, Relationship{
+			SourceID:    sourceID,
+			TargetID:    targetID,
+			Description: "calls",
+			Technology:  "Go",
+			Level:       "component",
+		})
+	}
+}
+
+func (b *DefaultModelBuilder) buildInterfaceImplRelationships(result *analyzer.AnalysisResult, model *C4Model) {
+	for _, impl := range result.InterfaceImpls {
+		sourceID := sanitizeID("component", impl.StructPkg+"/"+impl.StructName)
+		targetID := sanitizeID("component", impl.InterfacePkg+"/"+impl.InterfaceName)
+
+		if model.FindComponent(sourceID) == nil || model.FindComponent(targetID) == nil {
+			continue
+		}
+
+		model.Relationships = append(model.Relationships, Relationship{
+			SourceID:    sourceID,
+			TargetID:    targetID,
+			Description: "implements",
+			Level:       "component",
+		})
+	}
+}
+
+func (b *DefaultModelBuilder) markEntrypoints(result *analyzer.AnalysisResult, model *C4Model) {
+	for _, ep := range result.Entrypoints {
+		switch ep.Kind {
+		case "http_handler":
+			// Find component by matching container's PackagePath to ep.PkgPath
+			// If FuncName contains ".", split to get type.method and match by type
+			typeName := ""
+			if strings.Contains(ep.FuncName, ".") {
+				parts := strings.SplitN(ep.FuncName, ".", 2)
+				typeName = parts[0]
+			}
+
+			for i := range model.Components {
+				comp := &model.Components[i]
+				container := model.FindContainer(comp.ContainerID)
+				if container == nil || container.PackagePath != ep.PkgPath {
+					continue
+				}
+				if typeName != "" && comp.Name != typeName {
+					continue
+				}
+				comp.IsEntrypoint = true
+				comp.EntrypointKind = ep.Kind
+				comp.EntrypointRoute = ep.Route
+			}
+
+		case "main":
+			for i := range model.Components {
+				comp := &model.Components[i]
+				container := model.FindContainer(comp.ContainerID)
+				if container == nil || container.PackagePath != ep.PkgPath {
+					continue
+				}
+				comp.IsEntrypoint = true
+				comp.EntrypointKind = ep.Kind
+			}
+		}
+	}
 }
 
 // sanitizeID creates a URL-safe, deterministic ID from a prefix and path.
