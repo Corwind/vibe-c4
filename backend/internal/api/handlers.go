@@ -67,11 +67,19 @@ func (h *Handlers) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.Mode == "" {
+		req.Mode = "static"
+	}
+	if req.Mode != "static" && req.Mode != "ai" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "mode must be 'static' or 'ai'"})
+		return
+	}
+
 	if req.Name == "" {
 		req.Name = req.Path
 	}
 
-	p, err := h.projectService.AnalyzeFromPath(r.Context(), req.Path, req.Name)
+	p, err := h.projectService.AnalyzeFromPathWithMode(r.Context(), req.Path, req.Name, req.Mode)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": err.Error(),
@@ -111,7 +119,7 @@ func (h *Handlers) handleAnalyzeGitURL(w http.ResponseWriter, r *http.Request, r
 		name = filepath.Base(strings.TrimSuffix(req.GitURL, ".git"))
 	}
 
-	p, err := h.projectService.AnalyzeFromPath(r.Context(), cloneDir, name)
+	p, err := h.projectService.AnalyzeFromPathWithMode(r.Context(), cloneDir, name, req.Mode)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": err.Error(),
@@ -175,7 +183,12 @@ func (h *Handlers) handleAnalyzeUpload(w http.ResponseWriter, r *http.Request) {
 
 	name := strings.TrimSuffix(header.Filename, filepath.Ext(header.Filename))
 
-	p, err := h.projectService.AnalyzeFromPath(r.Context(), projectDir, name)
+	mode := r.FormValue("mode")
+	if mode == "" {
+		mode = "static"
+	}
+
+	p, err := h.projectService.AnalyzeFromPathWithMode(r.Context(), projectDir, name, mode)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": err.Error(),

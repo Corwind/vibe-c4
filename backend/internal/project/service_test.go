@@ -56,6 +56,7 @@ func TestService_AnalyzeFromPath(t *testing.T) {
 	svc := NewService(
 		&mockAnalyzer{result: analysisResult},
 		&mockBuilder{model: expectedModel},
+		nil,
 	)
 
 	proj, err := svc.AnalyzeFromPath(context.Background(), "/tmp/myapp", "myapp")
@@ -71,6 +72,7 @@ func TestService_AnalyzeFromPath_AnalyzerFailure(t *testing.T) {
 	svc := NewService(
 		&mockAnalyzer{err: fmt.Errorf("cannot parse go.mod")},
 		&mockBuilder{},
+		nil,
 	)
 
 	proj, err := svc.AnalyzeFromPath(context.Background(), "/tmp/bad", "bad")
@@ -87,6 +89,7 @@ func TestService_Get(t *testing.T) {
 	svc := NewService(
 		&mockAnalyzer{result: analysisResult},
 		&mockBuilder{model: model},
+		nil,
 	)
 
 	proj, err := svc.AnalyzeFromPath(context.Background(), "/tmp/myapp", "myapp")
@@ -107,6 +110,7 @@ func TestService_List(t *testing.T) {
 	svc := NewService(
 		&mockAnalyzer{result: minimalAnalysisResult()},
 		&mockBuilder{model: model},
+		nil,
 	)
 
 	_, err := svc.AnalyzeFromPath(context.Background(), "/tmp/a", "projA")
@@ -123,4 +127,55 @@ func TestService_List(t *testing.T) {
 	}
 	assert.True(t, names["projA"])
 	assert.True(t, names["projB"])
+}
+
+func TestService_AnalyzeFromPathWithMode_AI_Success(t *testing.T) {
+	analysisResult := minimalAnalysisResult()
+	aiModel := &c4model.C4Model{
+		Systems: []c4model.System{{ID: "system-ai", Name: "AI Generated"}},
+	}
+
+	svc := NewService(
+		&mockAnalyzer{result: analysisResult},
+		&mockBuilder{model: &c4model.C4Model{}},
+		&mockBuilder{model: aiModel},
+	)
+
+	proj, err := svc.AnalyzeFromPathWithMode(context.Background(), "/tmp/myapp", "myapp", "ai")
+	require.NoError(t, err)
+
+	assert.Equal(t, StatusComplete, proj.Status)
+	assert.Equal(t, "system-ai", proj.Model.Systems[0].ID)
+}
+
+func TestService_AnalyzeFromPathWithMode_AI_NoKey(t *testing.T) {
+	svc := NewService(
+		&mockAnalyzer{result: minimalAnalysisResult()},
+		&mockBuilder{},
+		nil,
+	)
+
+	proj, err := svc.AnalyzeFromPathWithMode(context.Background(), "/tmp/myapp", "myapp", "ai")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no API key configured")
+	assert.Equal(t, StatusFailed, proj.Status)
+}
+
+func TestService_AnalyzeFromPathWithMode_StaticDefault(t *testing.T) {
+	analysisResult := minimalAnalysisResult()
+	staticModel := &c4model.C4Model{
+		Systems: []c4model.System{{ID: "system-static", Name: "Static"}},
+	}
+
+	svc := NewService(
+		&mockAnalyzer{result: analysisResult},
+		&mockBuilder{model: staticModel},
+		&mockBuilder{model: &c4model.C4Model{}},
+	)
+
+	proj, err := svc.AnalyzeFromPathWithMode(context.Background(), "/tmp/myapp", "myapp", "static")
+	require.NoError(t, err)
+
+	assert.Equal(t, StatusComplete, proj.Status)
+	assert.Equal(t, "system-static", proj.Model.Systems[0].ID)
 }

@@ -33,7 +33,7 @@ func setupRouter(t *testing.T) *http.ServeMux {
 	t.Helper()
 	a := analyzer.NewGoAnalyzer()
 	b := c4model.NewModelBuilder()
-	ps := project.NewService(a, b)
+	ps := project.NewService(a, b, nil)
 	h := api.NewHandlers(ps)
 	_ = api.NewRouter(h)
 	return nil
@@ -43,7 +43,7 @@ func setupFullRouter(t *testing.T) (*api.Handlers, *project.Service) {
 	t.Helper()
 	a := analyzer.NewGoAnalyzer()
 	b := c4model.NewModelBuilder()
-	ps := project.NewService(a, b)
+	ps := project.NewService(a, b, nil)
 	h := api.NewHandlers(ps)
 	return h, ps
 }

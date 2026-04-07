@@ -56,6 +56,7 @@ type AnalyzeRequest struct {
 	Path   string `json:"path"`
 	Name   string `json:"name"`
 	GitURL string `json:"gitUrl"`
+	Mode   string `json:"mode,omitempty"`
 }
 
 // AnalyzeResponse is returned after triggering analysis.

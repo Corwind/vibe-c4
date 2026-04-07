@@ -32,23 +32,30 @@ type Project struct {
 
 // Service manages projects and their analysis.
 type Service struct {
-	mu       sync.RWMutex
-	projects map[string]*Project
-	analyzer analyzer.Analyzer
-	builder  c4model.ModelBuilder
+	mu        sync.RWMutex
+	projects  map[string]*Project
+	analyzer  analyzer.Analyzer
+	builder   c4model.ModelBuilder
+	aiBuilder c4model.ModelBuilder // optional, nil if no API key configured
 }
 
 // NewService creates a new project service.
-func NewService(a analyzer.Analyzer, b c4model.ModelBuilder) *Service {
+func NewService(a analyzer.Analyzer, b c4model.ModelBuilder, aiBuilder c4model.ModelBuilder) *Service {
 	return &Service{
-		projects: make(map[string]*Project),
-		analyzer: a,
-		builder:  b,
+		projects:  make(map[string]*Project),
+		analyzer:  a,
+		builder:   b,
+		aiBuilder: aiBuilder,
 	}
 }
 
-// AnalyzeFromPath triggers analysis of a Go project at the given path.
+// AnalyzeFromPath triggers analysis of a Go project at the given path using the default static builder.
 func (s *Service) AnalyzeFromPath(ctx context.Context, projectPath string, name string) (*Project, error) {
+	return s.AnalyzeFromPathWithMode(ctx, projectPath, name, "static")
+}
+
+// AnalyzeFromPathWithMode triggers analysis with a specific builder mode ("static" or "ai").
+func (s *Service) AnalyzeFromPathWithMode(ctx context.Context, projectPath string, name string, mode string) (*Project, error) {
 	id := generateID(projectPath)
 
 	p := &Project{
@@ -62,6 +69,19 @@ func (s *Service) AnalyzeFromPath(ctx context.Context, projectPath string, name 
 	s.projects[id] = p
 	s.mu.Unlock()
 
+	// Select builder based on mode
+	builder := s.builder
+	if mode == "ai" {
+		if s.aiBuilder == nil {
+			s.mu.Lock()
+			p.Status = StatusFailed
+			p.Error = "AI mode requested but no API key configured"
+			s.mu.Unlock()
+			return p, fmt.Errorf("AI mode requested but no API key configured; set ANTHROPIC_API_KEY or configure it in .vibe-c4.yaml")
+		}
+		builder = s.aiBuilder
+	}
+
 	result, err := s.analyzer.AnalyzeProject(ctx, projectPath)
 	if err != nil {
 		s.mu.Lock()
@@ -71,7 +91,7 @@ func (s *Service) AnalyzeFromPath(ctx context.Context, projectPath string, name 
 		return p, fmt.Errorf("analysis failed: %w", err)
 	}
 
-	model, err := s.builder.BuildFromAnalysis(result)
+	model, err := builder.BuildFromAnalysis(result)
 	if err != nil {
 		s.mu.Lock()
 		p.Status = StatusFailed
