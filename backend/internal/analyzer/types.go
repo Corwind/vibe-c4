@@ -65,6 +65,7 @@ type Entrypoint struct {
 
 // AnalysisResult holds the full analysis output for a Go project.
 type AnalysisResult struct {
+	ProjectPath          string                 `json:"project_path"`
 	Module               ModuleInfo             `json:"module"`
 	Packages             []PackageInfo          `json:"packages"`
 	ImportGraph          map[string][]string    `json:"import_graph"`

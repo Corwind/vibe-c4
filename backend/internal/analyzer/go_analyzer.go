@@ -50,6 +50,7 @@ func (a *GoAnalyzer) AnalyzeProject(ctx context.Context, projectPath string) (*A
 	interfaceImpls := matchInterfaceImpls(packages)
 
 	return &AnalysisResult{
+		ProjectPath:          absPath,
 		Module:               *moduleInfo,
 		Packages:             packages,
 		ImportGraph:          importGraph,
