@@ -143,7 +143,8 @@ func BuildUserPrompt(result *analyzer.AnalysisResult, repoContents map[string]st
 
 	for _, p := range paths {
 		content := repoContents[p]
-		sb.WriteString(fmt.Sprintf("### %s\n```go\n%s\n```\n\n", p, content))
+		lang := codeFenceLanguage(p)
+		sb.WriteString(fmt.Sprintf("### %s\n```%s\n%s\n```\n\n", p, lang, content))
 	}
 
 	// Section 3: Instructions
@@ -160,7 +161,7 @@ func EstimateTokens(content string) int {
 	return len(content) / 3
 }
 
-// ReadFullRepository reads all relevant Go source files from the project directory,
+// ReadFullRepository reads all relevant source files from the project directory,
 // respecting a token budget and prioritizing important files.
 func ReadFullRepository(projectPath string, tokenBudget int) (map[string]string, error) {
 	type fileEntry struct {
@@ -178,8 +179,7 @@ func ReadFullRepository(projectPath string, tokenBudget int) (map[string]string,
 
 		// Skip excluded directories
 		if info.IsDir() {
-			name := info.Name()
-			if name == "vendor" || name == "testdata" || name == ".git" {
+			if isExcludedDir(info.Name()) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -200,11 +200,11 @@ func ReadFullRepository(projectPath string, tokenBudget int) (map[string]string,
 			return nil
 		}
 
-		// Only include .go files (excluding tests)
-		if !strings.HasSuffix(info.Name(), ".go") {
+		// Exclude test files and binary/lock files
+		if strings.HasSuffix(info.Name(), "_test.go") {
 			return nil
 		}
-		if strings.HasSuffix(info.Name(), "_test.go") {
+		if isExcludedFile(info.Name()) {
 			return nil
 		}
 
@@ -260,36 +260,126 @@ func ReadFullRepository(projectPath string, tokenBudget int) (map[string]string,
 	return result, nil
 }
 
-// classifyFileTier determines the priority tier of a Go source file.
-// Tier 1 (highest): go.mod, main.go, files containing "interface " keyword
-// Tier 2: handler, controller, service, repository, server paths
-// Tier 3: model, types, domain paths
+// isExcludedDir returns true if the directory name should be skipped during repository traversal.
+func isExcludedDir(name string) bool {
+	switch name {
+	case "vendor", "testdata", ".git", "node_modules", ".next", "dist", "build", "__pycache__":
+		return true
+	}
+	return false
+}
+
+// isExcludedFile returns true if the file should be excluded based on its name or extension.
+func isExcludedFile(name string) bool {
+	lower := strings.ToLower(name)
+
+	// Exclude lock/generated files
+	switch lower {
+	case "go.sum", "package-lock.json", "yarn.lock", "pnpm-lock.yaml":
+		return true
+	}
+
+	// Exclude binary/large file extensions
+	ext := strings.ToLower(filepath.Ext(name))
+	switch ext {
+	case ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".webp",
+		".woff", ".woff2", ".ttf", ".eot",
+		".exe", ".o", ".a", ".so", ".dylib",
+		".zip", ".tar", ".gz", ".tgz", ".jar":
+		return true
+	}
+
+	return false
+}
+
+// classifyFileTier determines the priority tier of a source file.
+// Tier 1 (highest): go.mod, main.go, Dockerfile, docker-compose, Makefile, Go files with interfaces
+// Tier 2: SQL, proto files, handler/controller/service/repository/server Go files
+// Tier 3: config (yaml/toml/json), docs (md), model/types/domain Go files
 // Tier 4: everything else
 func classifyFileTier(relPath, content string) int {
 	base := filepath.Base(relPath)
 	lower := strings.ToLower(relPath)
+	ext := strings.ToLower(filepath.Ext(relPath))
 
-	// Tier 1: main.go or files with interfaces
-	if base == "main.go" {
+	// Tier 1: Critical architecture files
+	if base == "main.go" || base == "Dockerfile" || base == "docker-compose.yml" ||
+		base == "docker-compose.yaml" || base == "Makefile" {
 		return 1
 	}
-	if strings.Contains(content, "interface ") {
+	if ext == ".go" && strings.Contains(content, "interface ") {
 		return 1
 	}
 
-	// Tier 2: handler, controller, service, repository, server
-	for _, keyword := range []string{"handler", "controller", "service", "repository", "server"} {
-		if strings.Contains(lower, keyword) {
-			return 2
+	// Tier 2: High-value code and schema files
+	if ext == ".sql" || ext == ".proto" {
+		return 2
+	}
+	if ext == ".go" {
+		for _, kw := range []string{"handler", "controller", "service", "repository", "server"} {
+			if strings.Contains(lower, kw) {
+				return 2
+			}
 		}
 	}
 
-	// Tier 3: model, types, domain
-	for _, keyword := range []string{"model", "types", "domain"} {
-		if strings.Contains(lower, keyword) {
-			return 3
+	// Tier 3: Config, docs, types
+	if ext == ".yaml" || ext == ".yml" || ext == ".toml" || ext == ".json" || ext == ".md" {
+		return 3
+	}
+	if ext == ".go" {
+		for _, kw := range []string{"model", "types", "domain"} {
+			if strings.Contains(lower, kw) {
+				return 3
+			}
 		}
 	}
 
+	// Tier 4: Everything else
 	return 4
+}
+
+// codeFenceLanguage returns the code fence language identifier for a given file path.
+func codeFenceLanguage(filePath string) string {
+	base := filepath.Base(filePath)
+	ext := strings.ToLower(filepath.Ext(filePath))
+
+	// Handle files without extensions
+	switch strings.ToLower(base) {
+	case "dockerfile":
+		return "dockerfile"
+	case "makefile":
+		return "makefile"
+	}
+
+	switch ext {
+	case ".go":
+		return "go"
+	case ".sql":
+		return "sql"
+	case ".yaml", ".yml":
+		return "yaml"
+	case ".toml":
+		return "toml"
+	case ".json":
+		return "json"
+	case ".proto":
+		return "protobuf"
+	case ".md":
+		return "markdown"
+	case ".sh":
+		return "bash"
+	case ".py":
+		return "python"
+	case ".js":
+		return "javascript"
+	case ".ts":
+		return "typescript"
+	case ".rs":
+		return "rust"
+	case ".rb":
+		return "ruby"
+	default:
+		return ""
+	}
 }
