@@ -221,6 +221,158 @@ func TestCodeFenceLanguage(t *testing.T) {
 	assert.Equal(t, "", codeFenceLanguage("data.txt"))
 }
 
+func TestBuildContextPrompt(t *testing.T) {
+	prompt := BuildContextPrompt()
+
+	assert.Contains(t, prompt, "System Context")
+	assert.Contains(t, prompt, "Container")
+	assert.Contains(t, prompt, "systems")
+	assert.Contains(t, prompt, "containers")
+	assert.Contains(t, prompt, "relationships")
+	assert.NotContains(t, prompt, "code_elements")
+	assert.NotContains(t, prompt, `"level": "component"`)
+}
+
+func TestBuildComponentPrompt(t *testing.T) {
+	container := Container{
+		ID:          "container-internal-handler",
+		Name:        "internal/handler",
+		Description: "HTTP handler package",
+		Technology:  "Go",
+		PackagePath: "github.com/ex/app/internal/handler",
+		SystemID:    "system-app",
+	}
+	siblings := []Container{
+		{ID: "container-internal-service", Name: "internal/service"},
+		{ID: "container-pkg-utils", Name: "pkg/utils"},
+	}
+
+	prompt := BuildComponentPrompt(container, siblings)
+
+	assert.Contains(t, prompt, "internal/handler")
+	assert.Contains(t, prompt, "container-internal-handler")
+	assert.Contains(t, prompt, "internal/service")
+	assert.Contains(t, prompt, "pkg/utils")
+	assert.Contains(t, prompt, "components")
+	assert.Contains(t, prompt, "container_id")
+	assert.NotContains(t, prompt, "code_elements")
+}
+
+func TestBuildCodePrompt(t *testing.T) {
+	component := Component{
+		ID:          "component-handler-handler",
+		Name:        "Handler",
+		Type:        ComponentTypeStruct,
+		ContainerID: "container-internal-handler",
+		PackagePath: "github.com/ex/app/internal/handler",
+		Methods:     []string{"ServeHTTP", "Handle"},
+		Fields:      []string{"svc *service.Service", "logger *log.Logger"},
+	}
+
+	prompt := BuildCodePrompt(component)
+
+	assert.Contains(t, prompt, "Handler")
+	assert.Contains(t, prompt, "component-handler-handler")
+	assert.Contains(t, prompt, "ServeHTTP")
+	assert.Contains(t, prompt, "Handle")
+	assert.Contains(t, prompt, "svc *service.Service")
+	assert.Contains(t, prompt, "code_elements")
+	assert.Contains(t, prompt, "component_id")
+}
+
+func TestBuildContextUserPrompt(t *testing.T) {
+	result := &analyzer.AnalysisResult{
+		Module: analyzer.ModuleInfo{
+			ModulePath: "github.com/example/myapp",
+			GoVersion:  "1.21",
+		},
+		Packages: []analyzer.PackageInfo{
+			{Name: "main", ImportPath: "github.com/example/myapp", GoFiles: []string{"main.go"}},
+		},
+	}
+	repoContents := map[string]string{
+		"main.go": "package main\n\nfunc main() {}\n",
+	}
+
+	prompt := BuildContextUserPrompt(result, repoContents)
+
+	assert.Contains(t, prompt, "Static Analysis Results")
+	assert.Contains(t, prompt, "main.go")
+	assert.Contains(t, prompt, "Do NOT generate components")
+}
+
+func TestScopeFilesToPackage(t *testing.T) {
+	repoContents := map[string]string{
+		"internal/handler/handler.go": "package handler",
+		"internal/handler/routes.go":  "package handler",
+		"internal/service/service.go": "package service",
+		"pkg/utils/logger.go":         "package utils",
+		"go.mod":                      "module github.com/ex/app",
+		"main.go":                     "package main",
+	}
+	modulePath := "github.com/ex/app"
+
+	t.Run("scopes to specific package directory", func(t *testing.T) {
+		scoped := ScopeFilesToPackage(repoContents, "github.com/ex/app/internal/handler", modulePath)
+		assert.Len(t, scoped, 2)
+		assert.Contains(t, scoped, "internal/handler/handler.go")
+		assert.Contains(t, scoped, "internal/handler/routes.go")
+		assert.NotContains(t, scoped, "internal/service/service.go")
+	})
+
+	t.Run("root package returns all files", func(t *testing.T) {
+		scoped := ScopeFilesToPackage(repoContents, modulePath, modulePath)
+		assert.Len(t, scoped, len(repoContents))
+	})
+
+	t.Run("non-matching package returns empty map", func(t *testing.T) {
+		scoped := ScopeFilesToPackage(repoContents, "github.com/other/pkg", modulePath)
+		assert.Empty(t, scoped)
+	})
+}
+
+func TestScopeAnalysis(t *testing.T) {
+	result := &analyzer.AnalysisResult{
+		Module: analyzer.ModuleInfo{ModulePath: "github.com/ex/app"},
+		Packages: []analyzer.PackageInfo{
+			{Name: "handler", ImportPath: "github.com/ex/app/internal/handler"},
+			{Name: "service", ImportPath: "github.com/ex/app/internal/service"},
+			{Name: "utils", ImportPath: "github.com/ex/app/pkg/utils"},
+		},
+		ImportGraph: map[string][]string{
+			"github.com/ex/app/internal/handler": {"github.com/ex/app/internal/service"},
+			"github.com/ex/app/internal/service": {"github.com/ex/app/pkg/utils"},
+		},
+		CallGraph: []analyzer.FunctionCall{
+			{CallerPkg: "github.com/ex/app/internal/handler", CallerFunc: "Handle", CalleePkg: "github.com/ex/app/internal/service"},
+			{CallerPkg: "github.com/ex/app/internal/service", CallerFunc: "DoWork", CalleePkg: "github.com/ex/app/pkg/utils"},
+		},
+		ExternalInteractions: []analyzer.ExternalInteraction{
+			{Kind: analyzer.ExtKindHTTPHandler, PkgPath: "github.com/ex/app/internal/handler"},
+			{Kind: analyzer.ExtKindDatabase, PkgPath: "github.com/ex/app/internal/service"},
+		},
+		InterfaceImpls: []analyzer.InterfaceImpl{
+			{StructPkg: "github.com/ex/app/internal/handler", StructName: "Handler"},
+		},
+		Entrypoints: []analyzer.Entrypoint{
+			{Kind: "http_handler", PkgPath: "github.com/ex/app/internal/handler"},
+		},
+	}
+
+	scoped := ScopeAnalysis(result, []string{"github.com/ex/app/internal/handler"})
+
+	assert.Equal(t, result.Module, scoped.Module)
+	require.Len(t, scoped.Packages, 1)
+	assert.Equal(t, "github.com/ex/app/internal/handler", scoped.Packages[0].ImportPath)
+	require.Len(t, scoped.ImportGraph, 1)
+	assert.Contains(t, scoped.ImportGraph, "github.com/ex/app/internal/handler")
+	require.Len(t, scoped.CallGraph, 1)
+	assert.Equal(t, "github.com/ex/app/internal/handler", scoped.CallGraph[0].CallerPkg)
+	require.Len(t, scoped.ExternalInteractions, 1)
+	require.Len(t, scoped.Entrypoints, 1)
+	require.Len(t, scoped.InterfaceImpls, 1)
+}
+
 func TestEstimateTokens(t *testing.T) {
 	assert.Equal(t, 0, EstimateTokens(""))
 	assert.Equal(t, 1, EstimateTokens("abc"))

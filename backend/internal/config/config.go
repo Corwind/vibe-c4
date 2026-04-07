@@ -9,11 +9,12 @@ import (
 )
 
 type ClaudeConfig struct {
-	APIKey      string `yaml:"api_key"`
-	Model       string `yaml:"model"`
-	MaxTokens   int    `yaml:"max_tokens"`
-	TokenBudget int    `yaml:"token_budget"`
-	TimeoutSecs int    `yaml:"timeout_secs"`
+	APIKey         string `yaml:"api_key"`
+	Model          string `yaml:"model"`
+	MaxTokens      int    `yaml:"max_tokens"`
+	TokenBudget    int    `yaml:"token_budget"`
+	TimeoutSecs    int    `yaml:"timeout_secs"`
+	MaxConcurrency int    `yaml:"max_concurrency"`
 }
 
 type Config struct {
@@ -23,10 +24,11 @@ type Config struct {
 func defaults() *Config {
 	return &Config{
 		Claude: ClaudeConfig{
-			Model:       "claude-sonnet-4-20250514",
-			MaxTokens:   8192,
-			TokenBudget: 80000,
-			TimeoutSecs: 120,
+			Model:          "claude-sonnet-4-6",
+			MaxTokens:      8192,
+			TokenBudget:    80000,
+			TimeoutSecs:    120,
+			MaxConcurrency: 5,
 		},
 	}
 }

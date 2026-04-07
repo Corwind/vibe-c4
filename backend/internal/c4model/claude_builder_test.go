@@ -25,7 +25,7 @@ func (m *mockLLMClient) Complete(_ context.Context, _ llm.Request) (*llm.Respons
 func testConfig() config.ClaudeConfig {
 	return config.ClaudeConfig{
 		APIKey:      "test-key",
-		Model:       "claude-sonnet-4-20250514",
+		Model:       "claude-sonnet-4-6",
 		MaxTokens:   4096,
 		TokenBudget: 80000,
 		TimeoutSecs: 30,

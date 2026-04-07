@@ -37,7 +37,7 @@ func main() {
 			MaxTokens:   cfg.Claude.MaxTokens,
 			TimeoutSecs: cfg.Claude.TimeoutSecs,
 		})
-		aiBuilder = c4model.NewClaudeModelBuilder(claudeClient, cfg.Claude, staticBuilder)
+		aiBuilder = c4model.NewMultiPassBuilder(claudeClient, cfg.Claude, staticBuilder)
 		log.Printf("AI mode enabled (model: %s)", cfg.Claude.Model)
 	} else {
 		log.Printf("AI mode disabled (no API key configured)")

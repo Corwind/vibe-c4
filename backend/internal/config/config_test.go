@@ -16,10 +16,11 @@ func TestLoadDefaults(t *testing.T) {
 	cfg := defaults()
 
 	assert.Equal(t, "", cfg.Claude.APIKey)
-	assert.Equal(t, "claude-sonnet-4-20250514", cfg.Claude.Model)
+	assert.Equal(t, "claude-sonnet-4-6", cfg.Claude.Model)
 	assert.Equal(t, 8192, cfg.Claude.MaxTokens)
 	assert.Equal(t, 80000, cfg.Claude.TokenBudget)
 	assert.Equal(t, 120, cfg.Claude.TimeoutSecs)
+	assert.Equal(t, 5, cfg.Claude.MaxConcurrency)
 }
 
 func TestLoadFromYAML(t *testing.T) {
@@ -50,7 +51,7 @@ func TestLoadEnvVarFallback(t *testing.T) {
 
 	yamlContent := `
 claude:
-  model: "claude-sonnet-4-20250514"
+  model: "claude-sonnet-4-6"
 `
 	tmpFile := writeTemp(t, yamlContent)
 
