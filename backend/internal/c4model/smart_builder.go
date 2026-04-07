@@ -415,19 +415,6 @@ func (b *SmartModelBuilder) buildCodeElements(result *analyzer.AnalysisResult, m
 			}
 		}
 
-		// Standalone functions as code elements in their container
-		for _, fn := range pkg.Functions {
-			containerID := sanitizeID("container", pkg.ImportPath)
-			ceID := sanitizeID("code", pkg.ImportPath+"/"+fn.Name)
-			model.CodeElements = append(model.CodeElements, CodeElement{
-				ID:          ceID,
-				Name:        fn.Name,
-				Type:        CodeElementTypeFunction,
-				ComponentID: containerID,
-				FilePath:    fn.FilePath,
-				Line:        fn.Line,
-			})
-		}
 	}
 }
 

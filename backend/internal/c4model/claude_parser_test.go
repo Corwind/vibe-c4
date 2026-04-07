@@ -182,6 +182,28 @@ func TestValidateC4ModelInvalidComponentContainerID(t *testing.T) {
 	assert.Contains(t, err.Error(), "non-existent container ID")
 }
 
+func TestValidateC4ModelInvalidCodeElementComponentID(t *testing.T) {
+	model := &C4Model{
+		Systems: []System{
+			{ID: "system-main", Name: "Main"},
+		},
+		Containers: []Container{
+			{ID: "container-api", Name: "API", SystemID: "system-main"},
+		},
+		Components: []Component{
+			{ID: "component-handler", Name: "Handler", ContainerID: "container-api"},
+		},
+		CodeElements: []CodeElement{
+			{ID: "code-foo", Name: "Foo", ComponentID: "component-nonexistent"},
+		},
+	}
+
+	err := ValidateC4Model(model)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "non-existent component ID")
+	assert.Contains(t, err.Error(), "component-nonexistent")
+}
+
 func TestExtractJSON(t *testing.T) {
 	tests := []struct {
 		name     string

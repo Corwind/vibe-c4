@@ -68,6 +68,17 @@ func ValidateC4Model(model *C4Model) error {
 		}
 	}
 
+	// Validate code element ComponentID references (must reference an actual component)
+	componentIDs := make(map[string]bool)
+	for _, c := range model.Components {
+		componentIDs[c.ID] = true
+	}
+	for _, ce := range model.CodeElements {
+		if !componentIDs[ce.ComponentID] {
+			return fmt.Errorf("code element %q references non-existent component ID %q", ce.ID, ce.ComponentID)
+		}
+	}
+
 	// Validate relationship references (can reference any entity)
 	for _, r := range model.Relationships {
 		if !allIDs[r.SourceID] {
